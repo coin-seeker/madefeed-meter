@@ -1,0 +1,5 @@
+{"type":"turn_context","payload":{"model":"gpt-test","cwd":"/Users/x/secret-repo","text":"SECRET-PROMPT"}}
+{"type":"event_msg","timestamp":"2026-11-14T15:00:00Z","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":100},"last_token_usage":{"total_tokens":100}}}}
+{"type":"event_msg","timestamp":"2026-11-15T15:30:00Z","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":150},"last_token_usage":{"total_tokens":50}}}}
+{"type":"event_msg","timestamp":"2026-11-15T15:30:00Z","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":150},"last_token_usage":{"total_tokens":50}}}}
+{"type":"event_msg","timestamp":"2026-11-15T15:31:00Z","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":20},"last_token_usage":{"total_tokens":20}}}}
