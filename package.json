@@ -1,0 +1,21 @@
+{
+  "name": "madefeed",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "madefeed": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/cli.mjs --banner:js=\"#!/usr/bin/env node\"",
+    "typecheck": "tsrs --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "@types/node": "^22.18.0"
+  }
+}
