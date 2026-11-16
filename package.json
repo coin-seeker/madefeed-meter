@@ -9,7 +9,7 @@
     "node": ">=22.13"
   },
   "bin": {
-    "madefeed": "./dist/cli.mjs"
+    "madefeed": "dist/cli.mjs"
   },
   "files": [
     "dist",
