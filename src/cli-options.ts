@@ -13,7 +13,7 @@ export type Runtime = AutoRuntime & {
   readonly sleep?: (ms: number) => Promise<void>
 }
 
-export const VERSION = '0.3.0'
+export const VERSION = '0.3.1'
 export const help = helpText(VERSION)
 
 export function cliOptions(args: readonly string[]) {
