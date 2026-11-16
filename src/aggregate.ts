@@ -88,6 +88,15 @@ export function payload(
   return { deviceName, rows: aggregate(rows) }
 }
 
+export async function directory(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory()
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
+      return false
+    throw error
+  }
+}
 export async function* files(root: string): AsyncGenerator<string> {
   for (const entry of await readdir(root, { withFileTypes: true })) {
     const path = join(root, entry.name)

@@ -51,6 +51,21 @@ describe('usage readers', () => {
       ]),
     ).toThrow('100,000,000,000')
   })
+  it.each([
+    ['Claude Code', readClaude],
+    ['Codex', readCodex],
+  ])(
+    'treats a machine that never used %s as empty without a warning',
+    async (_name, read) => {
+      // Given
+      const home = await mkdtemp(join(tmpdir(), 'madefeed-test-'))
+      homes.push(home)
+      // When
+      const result = await read({ home, sinceMs: 0, env: {} })
+      // Then
+      expect(result).toEqual({ supported: true, rows: [] })
+    },
+  )
   it('counts Claude duplicate message.id + requestId once and strips private fields', async () => {
     // Given
     const home = await homeFor('claude')

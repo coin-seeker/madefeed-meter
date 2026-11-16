@@ -3,6 +3,7 @@ import { basename, isAbsolute, join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import {
   count,
+  directory,
   files,
   parseJson,
   record,
@@ -16,8 +17,7 @@ import { kstDateOf } from '../kst'
 import { databaseWorker } from './opencode-db'
 import type { DatabaseInput, DatabaseResult } from './opencode-db'
 
-const failure =
-  'OpenCode DB를 제한 시간 안에 읽을 수 없어 부분 집계 없이 unsupported로 처리해요.'
+const failure = 'OpenCode 기록을 제한 시간 안에 읽지 못해 이번에는 빼고 올려요.'
 
 async function databaseRows(input: DatabaseInput): Promise<DatabaseResult> {
   const worker = new Worker(
@@ -43,16 +43,6 @@ async function databaseRows(input: DatabaseInput): Promise<DatabaseResult> {
     })
   } finally {
     await worker.terminate()
-  }
-}
-
-async function directory(path: string): Promise<boolean> {
-  try {
-    return (await stat(path)).isDirectory()
-  } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
-      return false
-    throw error
   }
 }
 

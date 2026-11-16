@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import {
   count,
+  directory,
   files,
   jsonLines,
   recentFile,
@@ -17,7 +18,10 @@ export async function readClaude(
 ): Promise<SourceResult> {
   const messages = new Map<string, UsageRow>()
   try {
-    for await (const path of files(join(options.home, '.claude/projects'))) {
+    const root = join(options.home, '.claude/projects')
+    // A tool that was never used here is an empty result, not a warning.
+    if (!(await directory(root))) return { supported: true, rows: [] }
+    for await (const path of files(root)) {
       if (
         !path.endsWith('.jsonl') ||
         !(await recentFile(path, options.sinceMs))
@@ -60,7 +64,7 @@ export async function readClaude(
   } catch (error) {
     return unsupported(
       error,
-      'Claude Code 로그를 읽을 수 없어 unsupported로 처리해요.',
+      'Claude Code 기록을 읽지 못해 이번에는 빼고 올려요.',
     )
   }
 }

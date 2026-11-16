@@ -1,6 +1,7 @@
 import { join, basename } from 'node:path'
 import {
   count,
+  directory,
   files,
   jsonLines,
   recentFile,
@@ -15,7 +16,10 @@ import { kstDateOf } from '../kst'
 export async function readCodex(options: SourceOptions): Promise<SourceResult> {
   const rows: UsageRow[] = []
   try {
-    for await (const path of files(join(options.home, '.codex/sessions'))) {
+    const root = join(options.home, '.codex/sessions')
+    // A tool that was never used here is an empty result, not a warning.
+    if (!(await directory(root))) return { supported: true, rows: [] }
+    for await (const path of files(root)) {
       if (
         !basename(path).startsWith('rollout-') ||
         !path.endsWith('.jsonl') ||
@@ -58,9 +62,6 @@ export async function readCodex(options: SourceOptions): Promise<SourceResult> {
     }
     return { supported: true, rows }
   } catch (error) {
-    return unsupported(
-      error,
-      'Codex 로그를 읽을 수 없어 unsupported로 처리해요.',
-    )
+    return unsupported(error, 'Codex 기록을 읽지 못해 이번에는 빼고 올려요.')
   }
 }
