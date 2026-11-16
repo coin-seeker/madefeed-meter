@@ -58,3 +58,18 @@ npx @the-seeker/madefeed@latest
 ## 읽는 곳
 
 Claude Code, Codex, OpenCode, Gemini CLI의 로컬 사용 기록을 읽기 전용으로 읽어요. Cursor는 아직 지원하지 않아요.
+
+## 개발
+
+이 저장소는 MadeFeed 모노레포의 `packages/cli`를 내보낸 저장소예요. 개발하려면 Node.js 22.13 이상과 pnpm이 필요해요.
+
+```sh
+pnpm install
+pnpm test
+pnpm typecheck
+pnpm build
+```
+
+설치할 때 pnpm이 esbuild의 빌드 스크립트를 건너뛰었다고 알려줘도 괜찮아요.
+
+코드는 MadeFeed 모노레포에서 수정한 뒤 이 저장소로 내보내요.

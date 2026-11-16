@@ -3,6 +3,13 @@
   "version": "0.3.0",
   "description": "MadeFeed 토큰 미터: AI 코딩 도구의 토큰 사용량 합계를 madefeed.dev 에 올려요.",
   "homepage": "https://madefeed.dev/meter",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/coin-seeker/madefeed-meter.git"
+  },
+  "bugs": {
+    "url": "https://github.com/coin-seeker/madefeed-meter/issues"
+  },
   "license": "UNLICENSED",
   "type": "module",
   "engines": {
@@ -24,7 +31,9 @@
     "test": "vitest run --passWithNoTests"
   },
   "devDependencies": {
+    "@types/node": "^22.18.0",
     "esbuild": "0.28.2",
-    "@types/node": "^22.18.0"
+    "tsrs": "0.24.0-ts7.1.0-beta",
+    "vitest": "5.0.0"
   }
 }
