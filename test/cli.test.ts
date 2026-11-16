@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest'
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runCli } from '../src/cli'
@@ -19,6 +19,7 @@ it('dry-run never calls injected fetch and prints the exact upload body without 
   // When
   await runCli(['upload', '--dry-run', '--days', '1', '--json'], {
     home,
+    env: {},
     now: Date.parse('2026-11-16'),
     fetch: async () => {
       calls++
@@ -47,6 +48,7 @@ it('stores config at 0600 and status never prints a token', async () => {
   // When
   await runCli(['status', '--json'], {
     home,
+    env: {},
     output: (text) => output.push(text),
   })
   // Then
@@ -59,10 +61,49 @@ it('stores config at 0600 and status never prints a token', async () => {
   ).toContain('mfd_test')
   expect(output.join('')).not.toContain('mfd_test')
 })
+it('includes Gemini in the real dry-run body with an isolated environment', async () => {
+  // Given
+  const home = await mkdtemp(join(tmpdir(), 'madefeed-cli-gemini-'))
+  homes.push(home)
+  const directory = join(home, '.gemini/tmp')
+  await mkdir(directory, { recursive: true })
+  await writeFile(
+    join(directory, 'session.json'),
+    JSON.stringify({
+      type: 'gemini',
+      model: 'gemini-test',
+      timestamp: '2026-11-15T15:00:00Z',
+      tokens: { total: 3_000_000_000 },
+    }),
+  )
+  const output: string[] = []
+  // When
+  await runCli(['upload', '--dry-run', '--days', '1', '--json'], {
+    home,
+    env: {},
+    now: Date.parse('2026-11-16'),
+    output: (text) => output.push(text),
+    diagnostic: () => {},
+    fetch: async () => {
+      throw new TypeError('network forbidden')
+    },
+  })
+  // Then
+  expect(JSON.parse(output.join('')).rows).toEqual([
+    {
+      date: '2026-11-16',
+      tool: 'gemini',
+      model: 'gemini-test',
+      tokens: 3_000_000_000,
+    },
+  ])
+})
 it.each(['0', '36', '1.5', 'NaN'])(
   'rejects invalid --days %s',
   async (days) => {
     // Given / When / Then
-    await expect(runCli(['--dry-run', '--days', days])).rejects.toThrow('1~35')
+    await expect(
+      runCli(['--dry-run', '--days', days], { env: {} }),
+    ).rejects.toThrow('1~35')
   },
 )

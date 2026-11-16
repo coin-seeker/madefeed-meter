@@ -33,4 +33,4 @@ npx @the-seeker/madefeed@latest
 
 ## 읽는 곳
 
-Claude Code, Codex, OpenCode의 로컬 사용 기록을 읽기 전용으로 읽어요. Cursor는 아직 지원하지 않아요.
+Claude Code, Codex, OpenCode, Gemini CLI의 로컬 사용 기록을 읽기 전용으로 읽어요. Cursor는 아직 지원하지 않아요.

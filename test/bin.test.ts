@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, rm, symlink } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -11,6 +11,9 @@ import { afterAll, beforeAll, expect, it } from 'vitest'
 // The bundle must still run when it is started through that link.
 
 const run = promisify(execFile)
+const manifest = JSON.parse(
+  await readFile(new URL('../package.json', import.meta.url), 'utf8'),
+)
 let dir = ''
 
 beforeAll(async () => {
@@ -32,17 +35,23 @@ afterAll(async () => {
 })
 
 it('prints the version when started through the bin symlink', async () => {
-  const { stdout } = await run(process.execPath, [
-    join(dir, 'madefeed'),
-    '--version',
-  ])
-  expect(stdout.trim()).toBe('0.1.0')
+  // Given / When
+  const { stdout } = await run(
+    process.execPath,
+    [join(dir, 'madefeed'), '--version'],
+    { env: {} },
+  )
+  // Then
+  expect(stdout.trim()).toBe(manifest.version)
 })
 
 it('prints the version when started by its real path', async () => {
-  const { stdout } = await run(process.execPath, [
-    join(dir, 'pkg', 'cli.mjs'),
-    '--version',
-  ])
-  expect(stdout.trim()).toBe('0.1.0')
+  // Given / When
+  const { stdout } = await run(
+    process.execPath,
+    [join(dir, 'pkg', 'cli.mjs'), '--version'],
+    { env: {} },
+  )
+  // Then
+  expect(stdout.trim()).toBe(manifest.version)
 })

@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { readClaude } from '../src/sources/claude'
 import { readCodex } from '../src/sources/codex'
 import { readOpenCode } from '../src/sources/opencode'
-import { aggregate, payload } from '../src/aggregate'
+import { aggregate, payload, MAX_ROW_TOKENS } from '../src/aggregate'
 import { kstDateOf } from '../src/kst'
 
 const homes: string[] = []
@@ -31,11 +31,35 @@ async function homeFor(source: string) {
   return home
 }
 describe('usage readers', () => {
+  it('aggregates rows above two billion and rejects sums above the new cap', () => {
+    // Given
+    const row = {
+      date: '2026-11-15',
+      tool: 'opencode' as const,
+      model: 'model',
+      tokens: 3_124_282_929,
+    }
+    // When / Then
+    expect(aggregate([row])[0]?.tokens).toBe(3_124_282_929)
+    expect(aggregate([{ ...row, tokens: MAX_ROW_TOKENS }])[0]?.tokens).toBe(
+      MAX_ROW_TOKENS,
+    )
+    expect(() =>
+      aggregate([
+        { ...row, tokens: MAX_ROW_TOKENS },
+        { ...row, tokens: 1 },
+      ]),
+    ).toThrow('100,000,000,000')
+  })
   it('counts Claude duplicate message.id + requestId once and strips private fields', async () => {
     // Given
     const home = await homeFor('claude')
     // When
-    const result = await readClaude({ home, sinceMs: Date.parse('2026-11-15') })
+    const result = await readClaude({
+      home,
+      sinceMs: Date.parse('2026-11-15'),
+      env: {},
+    })
     const body = payload('test-device', aggregate(result.rows))
     // Then
     expect(body.rows).toEqual([
@@ -61,7 +85,11 @@ describe('usage readers', () => {
     // Given
     const home = await homeFor('codex')
     // When
-    const result = await readCodex({ home, sinceMs: Date.parse('2026-11-15') })
+    const result = await readCodex({
+      home,
+      sinceMs: Date.parse('2026-11-15'),
+      env: {},
+    })
     // Then
     expect(aggregate(result.rows)).toEqual([
       { date: '2026-11-16', tool: 'codex', model: 'gpt-test', tokens: 70 },
@@ -75,7 +103,7 @@ describe('usage readers', () => {
       kstDateOf('2026-11-15T15:30:00Z'),
     ]).toEqual(['2026-11-15', '2026-11-16', '2026-11-16'])
   })
-  it('uses OpenCode tokens.total, otherwise sums separate fields', async () => {
+  it('uses the larger OpenCode parts sum on an older schema without ids', async () => {
     // Given
     const home = await homeFor('claude')
     const directory = join(home, '.local/share/opencode')
@@ -104,13 +132,14 @@ describe('usage readers', () => {
     // When
     const result = await readOpenCode({
       home,
+      env: {},
       sinceMs: Date.parse('2026-11-15'),
     })
     // Then
     expect(result.supported).toBe(true)
-    expect(aggregate(result.rows)[0]?.tokens).toBe(138)
+    expect(aggregate(result.rows)[0]?.tokens).toBe(1014)
   })
-  it('refuses a full-scan database and falls back to legacy JSON', async () => {
+  it('reads an older schema without a time index alongside distinct legacy JSON', async () => {
     // Given
     const home = await homeFor('claude')
     const directory = join(home, '.local/share/opencode')
@@ -131,6 +160,7 @@ describe('usage readers', () => {
     // When
     const result = await readOpenCode({
       home,
+      env: {},
       sinceMs: Date.parse('2026-11-15'),
     })
     // Then

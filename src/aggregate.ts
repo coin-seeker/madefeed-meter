@@ -3,14 +3,19 @@ import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 
-export type Tool = 'claude-code' | 'codex' | 'opencode'
+export type Tool = 'claude-code' | 'codex' | 'opencode' | 'gemini'
+export const MAX_ROW_TOKENS = 100_000_000_000
 export type UsageRow = {
   readonly date: string
   readonly tool: Tool
   readonly model: string
   readonly tokens: number
 }
-export type SourceOptions = { readonly home: string; readonly sinceMs: number }
+export type SourceOptions = {
+  readonly home: string
+  readonly sinceMs: number
+  readonly env?: Readonly<Record<string, string | undefined>>
+}
 export type SourceResult = {
   readonly supported: boolean
   readonly reason?: string
@@ -63,8 +68,10 @@ export function aggregate(rows: readonly UsageRow[]): UsageRow[] {
     const model = modelName(row.model)
     const key = JSON.stringify([row.date, row.tool, model])
     const tokens = (totals.get(key)?.tokens ?? 0) + row.tokens
-    if (!Number.isSafeInteger(tokens) || tokens < 0 || tokens > 2e9)
-      throw new MeterError('토큰 합계가 서버 허용 범위(0~2e9)를 벗어나요.')
+    if (!Number.isSafeInteger(tokens) || tokens < 0 || tokens > MAX_ROW_TOKENS)
+      throw new MeterError(
+        '토큰 합계가 서버 허용 범위(0~100,000,000,000)를 벗어나요.',
+      )
     totals.set(key, { date: row.date, tool: row.tool, model, tokens })
   }
   return [...totals.values()].sort(

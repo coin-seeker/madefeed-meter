@@ -1,5 +1,5 @@
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { readFile, readdir, stat } from 'node:fs/promises'
+import { basename, isAbsolute, join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import {
   count,
@@ -9,75 +9,36 @@ import {
   timestamp,
   modelName,
   MeterError,
+  unsupported,
 } from '../aggregate'
 import type { SourceOptions, SourceResult, UsageRow } from '../aggregate'
 import { kstDateOf } from '../kst'
+import { databaseWorker } from './opencode-db'
+import type { DatabaseInput, DatabaseResult } from './opencode-db'
 
-// Runs outside the main event loop so even SQLite prepare/lock/iteration is killable.
-function databaseWorker() {
-  const { parentPort, workerData } = process.getBuiltinModule(
-    'node:worker_threads',
+const failure =
+  'OpenCode DB를 제한 시간 안에 읽을 수 없어 부분 집계 없이 unsupported로 처리해요.'
+
+async function databaseRows(input: DatabaseInput): Promise<DatabaseResult> {
+  const worker = new Worker(
+    `const {parentPort,workerData}=require('node:worker_threads'); parentPort.postMessage((${databaseWorker.toString()})(workerData))`,
+    {
+      eval: true,
+      workerData: input,
+    },
   )
   try {
-    const sqlite = process.getBuiltinModule?.('node:sqlite')
-    if (!sqlite) throw new TypeError('sqlite unavailable')
-    const db = new sqlite.DatabaseSync(workerData.path, { readOnly: true })
-    try {
-      db.exec('PRAGMA query_only=ON; PRAGMA busy_timeout=200')
-      const sql =
-        'SELECT time_created, data FROM message WHERE time_created >= ?'
-      const plan = db
-        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
-        .all(workerData.sinceMs)
-      // Never silently upload a partial rowid tail: it would overwrite complete totals.
-      if (
-        plan.some(
-          (row) =>
-            typeof row['detail'] !== 'string' ||
-            !/SEARCH message .*INDEX .*\(time_created>\?\)/.test(row['detail']),
-        )
-      )
-        throw new TypeError('no time index')
-      const rows = []
-      for (const row of db.prepare(sql).iterate(workerData.sinceMs)) {
-        if (rows.length >= 200_000) throw new RangeError('row budget')
-        rows.push(row)
-      }
-      parentPort?.postMessage({ rows })
-    } finally {
-      db.close()
-    }
-  } catch (error) {
-    if (error instanceof Error) parentPort?.postMessage({ error: true })
-    else throw error
-  }
-}
-
-async function databaseRows(options: SourceOptions): Promise<unknown[]> {
-  const worker = new Worker(`(${databaseWorker.toString()})()`, {
-    eval: true,
-    workerData: {
-      path: join(options.home, '.local/share/opencode/opencode.db'),
-      sinceMs: options.sinceMs,
-    },
-  })
-  try {
-    return await new Promise<unknown[]>((resolve, reject) => {
-      const timer = setTimeout(
-        () => reject(new MeterError('OpenCode DB 시간 예산을 초과해요.')),
-        2500,
-      )
+    return await new Promise<DatabaseResult>((resolve, reject) => {
       const fail = () => {
         clearTimeout(timer)
-        reject(new MeterError('OpenCode DB를 안전하게 조회할 수 없어요.'))
+        reject(new MeterError(failure))
       }
+      const timer = setTimeout(fail, 45_000)
       worker.once('error', fail)
       worker.once('exit', fail)
-      worker.once('message', (value: unknown) => {
+      worker.once('message', (value: DatabaseResult) => {
         clearTimeout(timer)
-        const rows = record(value)['rows']
-        if (Array.isArray(rows)) resolve(rows)
-        else fail()
+        resolve(value)
       })
     })
   } finally {
@@ -85,64 +46,110 @@ async function databaseRows(options: SourceOptions): Promise<unknown[]> {
   }
 }
 
-function usage(value: unknown, ms: number): UsageRow | undefined {
-  const data = record(value)
-  if (data['role'] !== 'assistant') return undefined
-  const tokens = record(data['tokens'])
-  const cache = record(tokens['cache'])
-  const total = tokens['total']
-  const sum =
-    typeof total === 'number'
-      ? count(total)
-      : count(tokens['input']) +
+async function directory(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory()
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
+      return false
+    throw error
+  }
+}
+
+async function legacyRows(root: string, options: SourceOptions) {
+  const rows = new Map<string, UsageRow>()
+  const storage = join(root, 'storage/message')
+  if (!(await directory(storage))) return rows
+  for await (const path of files(storage)) {
+    if (!path.endsWith('.json') || (await stat(path)).mtimeMs < options.sinceMs)
+      continue
+    const data = record(parseJson(await readFile(path, 'utf8')))
+    const ms = timestamp(record(data['time'])['created'])
+    if (
+      !Number.isFinite(ms) ||
+      ms < options.sinceMs ||
+      typeof data['modelID'] !== 'string'
+    )
+      continue
+    const raw = data['tokens']
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) continue
+    const tokens = record(raw)
+    const cache = record(tokens['cache'])
+    const sum = Math.max(
+      count(tokens['total']),
+      count(tokens['input']) +
         count(tokens['output']) +
         count(tokens['reasoning']) +
         count(cache['read']) +
-        count(cache['write'])
-  return {
-    date: kstDateOf(ms),
-    tool: 'opencode',
-    model: modelName(data['modelID']),
-    tokens: sum,
+        count(cache['write']),
+    )
+    if (sum === 0) continue
+    const id =
+      typeof data['id'] === 'string' ? data['id'] : basename(path, '.json')
+    rows.set(id, {
+      date: kstDateOf(ms),
+      tool: 'opencode',
+      model: modelName(data['modelID']),
+      tokens: sum,
+    })
   }
+  return rows
 }
 
 export async function readOpenCode(
   options: SourceOptions,
 ): Promise<SourceResult> {
   try {
+    const env = options.env ?? {}
+    const custom = env['OPENCODE_DATA_DIR']
+    const xdg = env['XDG_DATA_HOME']
+    const roots =
+      custom !== undefined
+        ? custom.split(',')
+        : [
+            xdg && isAbsolute(xdg)
+              ? join(xdg, 'opencode')
+              : join(options.home, '.local/share/opencode'),
+          ]
     const rows: UsageRow[] = []
-    for (const value of await databaseRows(options)) {
-      const row = record(value)
-      const ms = timestamp(row['time_created'])
-      if (typeof row['data'] !== 'string' || !Number.isFinite(ms)) continue
-      const parsed = usage(parseJson(row['data']), ms)
-      if (parsed) rows.push(parsed)
+    const seen = new Set<string>()
+    for (const root of roots) {
+      if (!root || !(await directory(root))) continue
+      const legacy = await legacyRows(root, options)
+      const entries = await readdir(root, { withFileTypes: true })
+      const names = entries
+        .filter((entry) => entry.isFile())
+        .map((entry) => entry.name)
+      const db = names.includes('opencode.db')
+        ? 'opencode.db'
+        : names.filter((name) => /^opencode-.*\.db$/.test(name)).sort()[0]
+      if (db) {
+        const result = await databaseRows({
+          path: join(root, db),
+          sinceMs: options.sinceMs,
+          legacyIds: [...legacy.keys()],
+          excludedIds: [...seen],
+        })
+        if ('error' in result)
+          return { supported: false, reason: failure, rows: [] }
+        rows.push(
+          ...result.totals.map(([date, model, tokens]) => ({
+            date,
+            tool: 'opencode' as const,
+            model: modelName(model),
+            tokens,
+          })),
+        )
+        for (const id of result.knownIds) seen.add(id)
+      }
+      for (const [id, row] of legacy) {
+        if (seen.has(id)) continue
+        rows.push(row)
+        seen.add(id)
+      }
     }
     return { supported: true, rows }
   } catch (error) {
-    if (!(error instanceof Error)) throw error
-  }
-  try {
-    const rows: UsageRow[] = []
-    for await (const path of files(
-      join(options.home, '.local/share/opencode/storage/message'),
-    )) {
-      if (!path.endsWith('.json')) continue
-      const data = parseJson(await readFile(path, 'utf8'))
-      const ms = timestamp(record(record(data)['time'])['created'])
-      if (!Number.isFinite(ms) || ms < options.sinceMs) continue
-      const parsed = usage(data, ms)
-      if (parsed) rows.push(parsed)
-    }
-    return { supported: true, reason: 'OpenCode legacy JSON을 사용해요.', rows }
-  } catch (error) {
-    if (!(error instanceof Error)) throw error
-    return {
-      supported: false,
-      reason:
-        'OpenCode는 시간 인덱스·조회 시간 예산 또는 legacy JSON을 사용할 수 없어 unsupported로 처리해요.',
-      rows: [],
-    }
+    return unsupported(error, failure)
   }
 }

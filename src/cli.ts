@@ -9,8 +9,10 @@ import { kstDateOf, windowStart } from './kst'
 import { readClaude } from './sources/claude'
 import { readCodex } from './sources/codex'
 import { readOpenCode } from './sources/opencode'
+import { readGemini } from './sources/gemini'
 
-const help = `madefeed 0.1.0 — 토큰 미터예요.
+const VERSION = '0.2.0'
+const help = `madefeed ${VERSION} — 토큰 미터예요.
 사용법: madefeed [login|upload|logout|status] [옵션]
   --dry-run    전송 없이 합계와 정확한 요청 JSON을 출력해요.
   --days N     오늘을 포함한 KST 일수예요. 기본 14, 최대 35예요.
@@ -18,9 +20,11 @@ const help = `madefeed 0.1.0 — 토큰 미터예요.
   --json       기계가 읽을 JSON만 표준 출력으로 내보내요.
   --help       도움말을 보여줘요.
   --version    버전을 보여줘요.
+Claude Code, Codex, OpenCode, Gemini CLI를 읽어요.
 기본 실행은 로그인 후 사용량을 전송해요. Cursor는 unsupported예요.`
 
 type Runtime = {
+  readonly env?: Readonly<Record<string, string | undefined>>
   readonly home?: string
   readonly now?: number
   readonly fetch?: typeof fetch
@@ -62,7 +66,7 @@ export async function runCli(
     return
   }
   if (values['version']) {
-    output('0.1.0')
+    output(VERSION)
     return
   }
   const days = Number(values['days'] ?? 14)
@@ -79,6 +83,7 @@ export async function runCli(
       '--dry-run은 기본 실행 또는 upload에서만 사용할 수 있어요.',
     )
   const home = runtime.home ?? homedir()
+  const env = runtime.env ?? process.env
   if (command === 'logout') {
     await logout(home)
     output(
@@ -91,7 +96,7 @@ export async function runCli(
   const config = await readConfig(home)
   const chosen =
     values['url'] ??
-    process.env['MADEFEED_URL'] ??
+    env['MADEFEED_URL'] ??
     config?.url ??
     'https://madefeed.dev'
   if (typeof chosen !== 'string')
@@ -116,7 +121,7 @@ export async function runCli(
     return
   }
   const now = runtime.now ?? Date.now()
-  const options = { home, sinceMs: windowStart(now, days) }
+  const options = { home, sinceMs: windowStart(now, days), env }
   const api = {
     url,
     fetch: runtime.fetch ?? fetch,
@@ -129,6 +134,7 @@ export async function runCli(
           readClaude(options),
           readCodex(options),
           readOpenCode(options),
+          readGemini(options),
         ])
       : []
   for (const source of sources) if (source.reason) diagnostic(source.reason)
