@@ -1,0 +1,48 @@
+import { execFile } from 'node:child_process'
+import { mkdtemp, rm, symlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
+import { build } from 'esbuild'
+import { afterAll, beforeAll, expect, it } from 'vitest'
+
+// npm installs the bin as a symlink (node_modules/.bin/madefeed -> dist/cli.mjs).
+// The bundle must still run when it is started through that link.
+
+const run = promisify(execFile)
+let dir = ''
+
+beforeAll(async () => {
+  dir = await mkdtemp(join(tmpdir(), 'madefeed-bin-'))
+  await build({
+    entryPoints: [fileURLToPath(new URL('../src/cli.ts', import.meta.url))],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    target: 'node22',
+    outfile: join(dir, 'pkg', 'cli.mjs'),
+    logLevel: 'silent',
+  })
+  await symlink(join(dir, 'pkg', 'cli.mjs'), join(dir, 'madefeed'))
+})
+
+afterAll(async () => {
+  await rm(dir, { recursive: true, force: true })
+})
+
+it('prints the version when started through the bin symlink', async () => {
+  const { stdout } = await run(process.execPath, [
+    join(dir, 'madefeed'),
+    '--version',
+  ])
+  expect(stdout.trim()).toBe('0.1.0')
+})
+
+it('prints the version when started by its real path', async () => {
+  const { stdout } = await run(process.execPath, [
+    join(dir, 'pkg', 'cli.mjs'),
+    '--version',
+  ])
+  expect(stdout.trim()).toBe('0.1.0')
+})

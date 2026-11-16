@@ -1,5 +1,5 @@
+import { realpathSync } from 'node:fs'
 import { homedir, hostname } from 'node:os'
-import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 import { aggregate, MeterError, payload } from './aggregate'
@@ -177,10 +177,20 @@ export async function runCli(
   )
 }
 
-if (
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(resolve(process.argv[1])).href
-) {
+// npm runs the bin through a symlink (node_modules/.bin/madefeed), so compare
+// real paths; a missing or unreadable argv[1] means this file was imported.
+function invokedDirectly(): boolean {
+  const entry = process.argv[1]
+  if (!entry) return false
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(entry)).href
+  } catch (error) {
+    if (error instanceof Error) return false
+    throw error
+  }
+}
+
+if (invokedDirectly()) {
   runCli(process.argv.slice(2)).catch((error: unknown) => {
     // Only controlled errors reach output: filesystem/network errors can contain private paths.
     const message =
