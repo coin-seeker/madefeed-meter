@@ -56,6 +56,7 @@ export async function cliFixture() {
           interval: 1,
         })
       if (url.endsWith('/token')) return Response.json({ token: 'mfd_test' })
+      if (url.endsWith('/revoke')) return Response.json({ ok: true })
       bodies.push(JSON.parse(String(init?.body)))
       return Response.json({ accepted: 1, weekTokens: 12, votesGranted: 0 })
     },

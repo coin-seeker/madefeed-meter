@@ -1,6 +1,19 @@
-import { installAgent, removeAgent, trimLog, agentPath } from './agent'
+import {
+  installAgent,
+  removeAgent,
+  removeLog,
+  trimLog,
+  agentPath,
+} from './agent'
 import { MeterError } from './aggregate'
-import { saveConfig } from './config'
+import { logout, saveConfig } from './config'
+import {
+  autoEnabled,
+  cleanupFailure,
+  connectionRequired,
+  invalidAuto,
+  setupFailure,
+} from './copy'
 import type { Config } from './config'
 import { installSchedule, removeSchedule, scheduleStatus } from './schedule'
 import type { Exec, ScheduleContext, ScheduleStatus } from './schedule'
@@ -17,8 +30,6 @@ export type AutoOptions = {
   readonly env: Readonly<Record<string, string | undefined>>
   readonly diagnostic: (text: string) => void
 }
-const failure =
-  '자동 전송을 설정할 수 없어요. madefeed upload로 수동 전송할 수 있어요.'
 export function automatic(options: AutoOptions) {
   const { runtime, home, env, diagnostic } = options
   const active = runtime.exec !== undefined && runtime.self !== undefined
@@ -31,11 +42,14 @@ export function automatic(options: AutoOptions) {
     env,
     ...(active ? { exec: runtime.exec } : {}),
   }
-  async function safely(action: () => Promise<void>): Promise<void> {
+  async function safely(
+    action: () => Promise<void>,
+    message: string,
+  ): Promise<void> {
     try {
       await action()
     } catch (error) {
-      if (error instanceof Error) diagnostic(failure)
+      if (error instanceof Error) diagnostic(message)
       else throw error
     }
   }
@@ -45,7 +59,7 @@ export function automatic(options: AutoOptions) {
         return await scheduleStatus(context)
       } catch (error) {
         if (!(error instanceof Error)) throw error
-        diagnostic(failure)
+        diagnostic(setupFailure)
         return { enabled: false, kind: 'none' }
       }
     },
@@ -56,24 +70,28 @@ export function automatic(options: AutoOptions) {
         await installAgent(self, home)
         const result = await installSchedule(context)
         if (!result.supported) {
-          diagnostic(failure)
+          diagnostic(setupFailure)
           return
         }
         await saveConfig(home, { ...config, auto: 'on' })
         if (config.auto !== 'on')
-          diagnostic(
-            '이제 한 시간마다 사용량을 자동 전송해요. 끄려면 madefeed auto off를 실행해 주세요.',
-          )
-      })
+          for (const line of autoEnabled) diagnostic(line)
+      }, setupFailure)
     },
-    async remove(): Promise<void> {
-      if (!active) return
-      // Independent cleanup: a scheduler failure must not leave the agent behind.
-      await safely(() => removeSchedule(context))
-      await safely(() => removeAgent(home))
+    async remove(scope: 'auto' | 'device'): Promise<void> {
+      const failure = cleanupFailure(scope)
+      if (active) {
+        await safely(() => removeAgent(home), failure)
+        await safely(() => removeLog(home), failure)
+      }
+      try {
+        if (scope === 'device') await logout(home)
+      } finally {
+        if (active) await safely(() => removeSchedule(context), failure)
+      }
     },
     async trim(): Promise<void> {
-      await safely(() => trimLog(home))
+      await safely(() => trimLog(home), setupFailure)
     },
   }
 }
@@ -85,18 +103,17 @@ export async function autoCommand(
   const auto = automatic(options)
   switch (action) {
     case 'on':
-      if (!config)
-        throw new MeterError('먼저 madefeed login으로 기기를 연결해 주세요.')
+      if (!config) throw new MeterError(connectionRequired)
       await auto.install(config)
       break
     case 'off':
-      await auto.remove()
+      await auto.remove('auto')
       if (config) await saveConfig(options.home, { ...config, auto: 'off' })
       break
     case 'status':
       break
     default:
-      throw new MeterError('auto on, off, status 중 하나를 사용해 주세요.')
+      throw new MeterError(invalidAuto)
   }
   return auto.status()
 }

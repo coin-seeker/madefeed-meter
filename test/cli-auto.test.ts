@@ -7,6 +7,7 @@ import { agentPath } from '../src/agent'
 import { schedulePaths } from '../src/schedule-builders'
 import { config } from './schedule-fixtures'
 import { cliFixture } from './cli-fixtures'
+import { setupFailure } from '../src/copy'
 
 it('installs an agent and launchd job after a successful login', async () => {
   // Given
@@ -19,7 +20,7 @@ it('installs an agent and launchd job after a successful login', async () => {
   )
   expect(calls.some((call) => call.args[0] === 'bootstrap')).toBe(true)
   expect((await readConfig(home))?.auto).toBe('on')
-  expect(diagnostic.join('\n')).toContain('madefeed auto off')
+  expect(diagnostic.join('\n')).toContain('auto off')
   expect(output.join('\n') + diagnostic.join('\n')).not.toContain(
     config.deviceToken,
   )
@@ -98,6 +99,7 @@ it.each(['off', 'logout'])(
     const directory = join(home, '.config/madefeed')
     for (const name of ['prod.env', 'google-oauth-web.json'])
       await writeFile(join(directory, name), `unchanged ${name}`)
+    await writeFile(join(directory, 'auto.log'), 'earlier run\n')
     calls.length = 0
     // When
     await runCli(action === 'logout' ? ['logout'] : ['auto', 'off'], runtime)
@@ -111,6 +113,9 @@ it.each(['off', 'logout'])(
       code: 'ENOENT',
     })
     await expect(stat(agentPath(home))).rejects.toMatchObject({
+      code: 'ENOENT',
+    })
+    await expect(stat(join(directory, 'auto.log'))).rejects.toMatchObject({
       code: 'ENOENT',
     })
     expect(await readConfig(home)).toEqual(
@@ -140,10 +145,8 @@ it('keeps a successful upload successful when scheduler registration fails', asy
     },
   })
   // Then
-  expect(output.at(-1)).toBe('1개 사용량 합계를 전송했어요.')
-  expect(
-    diagnostic.filter((line) => line.includes('madefeed upload')),
-  ).toHaveLength(1)
+  expect(output.at(-1)).toContain('1건')
+  expect(diagnostic.filter((line) => line === setupFailure)).toHaveLength(1)
   expect((await readConfig(home))?.auto).toBeUndefined()
 })
 it('does not hide an upload error when scheduling also fails', async () => {

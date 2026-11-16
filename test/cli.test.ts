@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { runCli } from '../src/cli'
 import { readConfig, saveConfig } from '../src/config'
 import { MeterError } from '../src/aggregate'
+import { RUN } from '../src/copy'
 import { fixture, config } from './schedule-fixtures'
 import { installSchedule } from '../src/schedule'
 import { schedulePaths } from '../src/schedule-builders'
@@ -119,7 +120,7 @@ it('rejects auto on without a token with a controlled connection instruction', a
   const result = runCli(['auto', 'on'], { home, exec, self, env: {} })
   // Then
   await expect(result).rejects.toBeInstanceOf(MeterError)
-  await expect(result).rejects.toThrow('먼저 madefeed login')
+  await expect(result).rejects.toThrow(RUN)
 })
 it.each([['logout'], ['auto', 'off']])(
   'keeps scheduler defaults inert for %j',
@@ -132,7 +133,12 @@ it.each([['logout'], ['auto', 'off']])(
     const before = await readFile(plist, 'utf8')
     calls.length = 0
     // When
-    await runCli(args, { home, env: {}, output: () => {} })
+    await runCli(args, {
+      home,
+      env: {},
+      output: () => {},
+      fetch: async () => Response.json({ ok: true }),
+    })
     // Then
     expect(calls).toEqual([])
     expect(await readFile(plist, 'utf8')).toBe(before)

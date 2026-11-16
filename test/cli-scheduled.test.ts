@@ -6,6 +6,7 @@ import { saveConfig } from '../src/config'
 import { agentPath } from '../src/agent'
 import { config } from './schedule-fixtures'
 import { cliFixture } from './cli-fixtures'
+import { setupFailure } from '../src/copy'
 
 it('skips scheduled uploads without a usable token and never requests login', async () => {
   // Given
@@ -58,9 +59,8 @@ it('prints diagnostics and one timestamped result while uploading only the three
       ],
     },
   ])
-  expect(output).toEqual([
-    '2026-11-16T09:00:00.000Z 1개 사용량 합계를 전송했어요.',
-  ])
+  expect(output).toHaveLength(1)
+  expect(output[0]).toMatch(/^2026-11-16T09:00:00\.000Z .*1건/)
   expect(diagnostic.some((line) => line.includes('OpenCode'))).toBe(true)
   expect(output.join('') + diagnostic.join('')).not.toContain(
     config.deviceToken,
@@ -92,9 +92,7 @@ it('keeps manual uploads usable when copying the bundle fails', async () => {
   // When
   await runCli(['upload'], { ...runtime, self: join(home, 'missing.mjs') })
   // Then
-  expect(output.at(-1)).toBe('1개 사용량 합계를 전송했어요.')
-  expect(
-    diagnostic.filter((line) => line.includes('madefeed upload')),
-  ).toHaveLength(1)
+  expect(output.at(-1)).toContain('1건')
+  expect(diagnostic.filter((line) => line === setupFailure)).toHaveLength(1)
   expect(calls).toEqual([])
 })

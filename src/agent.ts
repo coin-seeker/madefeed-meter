@@ -46,6 +46,9 @@ export async function removeAgent(home: string): Promise<void> {
     force: true,
   })
 }
+export async function removeLog(home: string): Promise<void> {
+  await rm(join(home, '.config/madefeed/auto.log'), { force: true })
+}
 export async function trimLog(home: string): Promise<void> {
   let file
   try {

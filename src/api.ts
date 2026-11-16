@@ -1,6 +1,7 @@
 import { setTimeout } from 'node:timers/promises'
 import { MeterError, record, payload } from './aggregate'
 import type { UsagePayload } from './aggregate'
+import { apiFailure, expiredCode, invalidCode } from './copy'
 
 export type Api = {
   readonly url: string
@@ -22,15 +23,10 @@ export type UploadResult = {
 
 export class ApiError extends MeterError {
   constructor(readonly status: number) {
-    super(
-      status === 401
-        ? 'HTTP 401: 기기 인증이 유효하지 않아요. login으로 다시 연결해 주세요.'
-        : status === 422
-          ? 'HTTP 422: 사용량 형식이 서버 규칙과 맞지 않아요.'
-          : `HTTP ${status}: 서버 요청에 실패했어요.`,
-    )
+    super(apiFailure(status))
   }
 }
+export class DisconnectedError extends MeterError {}
 type Post = {
   readonly path: string
   readonly body: unknown
@@ -142,20 +138,38 @@ export async function pollToken(api: Api, device: Device): Promise<string> {
       case 'authorization_pending':
         continue
       case 'expired_token':
-        throw new MeterError(
-          '기기 인증 코드가 만료됐어요. login을 다시 실행해 주세요.',
-        )
+        throw new MeterError(expiredCode)
       case 'invalid_grant':
-        throw new MeterError(
-          '유효하지 않은 인증 코드예요. login을 다시 실행해 주세요.',
-        )
+        throw new MeterError(invalidCode)
       default:
         throw new ApiError(status)
     }
   }
-  throw new MeterError(
-    '기기 인증 코드가 만료됐어요. login을 다시 실행해 주세요.',
-  )
+  throw new MeterError(expiredCode)
+}
+export async function revokeDevice(
+  api: Api,
+  token: string,
+): Promise<'revoked' | 'already' | 'unreachable'> {
+  try {
+    const { status, data } = await post(api, {
+      path: '/api/meter/revoke',
+      body: {},
+      token,
+    })
+    if (status === 200 && data['ok'] === true) return 'revoked'
+    if (status === 401 && record(data['error'])['code'] === 'unauthorized')
+      return 'already'
+    return 'unreachable'
+  } catch (error) {
+    if (error instanceof MeterError) return 'unreachable'
+    throw error
+  }
+}
+function responseNumber(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0)
+    throw new MeterError('사용량 저장 응답이 올바르지 않아요.')
+  return value
 }
 export async function uploadUsage(
   api: Api,
@@ -166,7 +180,8 @@ export async function uploadUsage(
   let weekTokens = 0
   let votesGranted = 0
   const safe = payload(body.deviceName, body.rows)
-  for (let offset = 0; offset < safe.rows.length; offset += 200) {
+  let offset = 0
+  do {
     const { status, data } = await post(api, {
       path: '/api/meter/usage',
       token,
@@ -175,29 +190,13 @@ export async function uploadUsage(
         rows: safe.rows.slice(offset, offset + 200),
       },
     })
+    if (status === 401 && record(data['error'])['code'] === 'unauthorized')
+      throw new DisconnectedError(apiFailure(status))
     if (status !== 200) throw new ApiError(status)
-    const values = [data['accepted'], data['weekTokens'], data['votesGranted']]
-    if (
-      !values.every(
-        (value) =>
-          typeof value === 'number' &&
-          Number.isSafeInteger(value) &&
-          value >= 0,
-      )
-    )
-      throw new MeterError('사용량 저장 응답이 올바르지 않아요.')
-    const a = data['accepted']
-    const w = data['weekTokens']
-    const v = data['votesGranted']
-    if (
-      typeof a === 'number' &&
-      typeof w === 'number' &&
-      typeof v === 'number'
-    ) {
-      accepted += a
-      weekTokens = w
-      votesGranted += v
-    }
-  }
+    accepted += responseNumber(data['accepted'])
+    weekTokens = responseNumber(data['weekTokens'])
+    votesGranted += responseNumber(data['votesGranted'])
+    offset += 200
+  } while (offset < safe.rows.length)
   return { accepted, weekTokens, votesGranted }
 }

@@ -9,6 +9,35 @@ import {
 import { schedulePaths } from '../src/schedule-builders'
 import { fixture } from './schedule-fixtures'
 
+it('removes the darwin plist before bootout', async () => {
+  // Given
+  const { context, exec } = await fixture()
+  await installSchedule(context)
+  let removed = false
+  // When
+  await removeSchedule({
+    ...context,
+    exec: async (file, args, options) => {
+      if (args[0] === 'bootout') {
+        try {
+          await stat(schedulePaths(context).plist)
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            'code' in error &&
+            error.code === 'ENOENT'
+          )
+            removed = true
+          else throw error
+        }
+      }
+      return exec(file, args, options)
+    },
+  })
+  // Then
+  expect(removed).toBe(true)
+})
+
 it('installs an escaped launchd plist and bootstraps the precise argument array', async () => {
   // Given
   const { context, calls } = await fixture()

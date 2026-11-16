@@ -1,7 +1,16 @@
-import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import {
+  chmod,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  rmdir,
+  writeFile,
+} from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { MeterError, parseJson, record } from './aggregate'
+import { invalidConfig, invalidUrl, unsafeUrl } from './copy'
 
 export type Config = {
   readonly url: string
@@ -14,8 +23,7 @@ export function serviceUrl(value: string): string {
   try {
     url = new URL(value)
   } catch (error) {
-    if (error instanceof TypeError)
-      throw new MeterError('서버 URL이 올바르지 않아요.')
+    if (error instanceof TypeError) throw new MeterError(invalidUrl)
     throw error
   }
   const local = ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
@@ -27,7 +35,7 @@ export function serviceUrl(value: string): string {
     url.hash ||
     url.pathname !== '/'
   )
-    throw new MeterError('서버 URL은 인증 정보 없는 HTTPS origin이어야 해요.')
+    throw new MeterError(unsafeUrl)
   return url.origin
 }
 export async function readConfig(home: string): Promise<Config | undefined> {
@@ -43,9 +51,7 @@ export async function readConfig(home: string): Promise<Config | undefined> {
       !/^mfd_[A-Za-z0-9_-]+$/.test(data['deviceToken']) ||
       typeof data['deviceName'] !== 'string'
     )
-      throw new MeterError(
-        '설정 파일이 올바르지 않아요. login으로 다시 연결해 주세요.',
-      )
+      throw new MeterError(invalidConfig)
     return {
       url: serviceUrl(data['url']),
       deviceToken: data['deviceToken'],
@@ -77,4 +83,17 @@ export async function saveConfig(home: string, config: Config): Promise<void> {
 }
 export async function logout(home: string): Promise<void> {
   await rm(join(home, '.config/madefeed/cli.json'), { force: true })
+  try {
+    await rmdir(join(home, '.config/madefeed'))
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      'code' in error &&
+      (error.code === 'ENOTEMPTY' ||
+        error.code === 'EEXIST' ||
+        error.code === 'ENOENT')
+    )
+      return
+    throw error
+  }
 }

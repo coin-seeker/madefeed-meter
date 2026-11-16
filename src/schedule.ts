@@ -143,11 +143,12 @@ export async function removeSchedule(context: ScheduleContext): Promise<void> {
   const paths = schedulePaths(context)
   switch (context.platform) {
     case 'darwin':
+      // Files first: bootout stops this process when it is the scheduled job itself.
+      await rm(paths.plist, { force: true })
       await succeeds(context, 'launchctl', [
         'bootout',
         `gui/${context.uid}/${label}`,
       ])
-      await rm(paths.plist, { force: true })
       return
     case 'linux': {
       await succeeds(context, 'systemctl', [

@@ -5,6 +5,22 @@ import { requestDevice, pollToken, uploadUsage } from '../src/api'
 import { payload } from '../src/aggregate'
 
 const cleanup: (() => Promise<void>)[] = []
+it('sends exactly one heartbeat request when rows are empty', async () => {
+  // Given
+  const bodies: unknown[] = []
+  const api = {
+    url: 'https://example.com',
+    fetch: async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)))
+      return Response.json({ accepted: 0, weekTokens: 12, votesGranted: 0 })
+    },
+  }
+  // When
+  const result = await uploadUsage(api, 'mfd_test', payload('test-device', []))
+  // Then
+  expect(bodies).toEqual([{ deviceName: 'test-device', rows: [] }])
+  expect(result).toEqual({ accepted: 0, weekTokens: 12, votesGranted: 0 })
+})
 afterEach(async () => {
   for (const close of cleanup.splice(0)) await close()
 })
