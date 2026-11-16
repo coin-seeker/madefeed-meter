@@ -1,14 +1,23 @@
 {
-  "name": "madefeed",
+  "name": "@the-seeker/madefeed",
   "version": "0.1.0",
-  "private": true,
+  "description": "MadeFeed 토큰 미터: AI 코딩 도구의 토큰 사용량 합계를 madefeed.dev 에 올려요.",
+  "homepage": "https://madefeed.dev/meter",
+  "license": "UNLICENSED",
   "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
   "bin": {
     "madefeed": "./dist/cli.mjs"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/cli.mjs --banner:js=\"#!/usr/bin/env node\"",
     "typecheck": "tsrs --noEmit",
