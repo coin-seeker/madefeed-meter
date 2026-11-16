@@ -4,6 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runCli } from '../src/cli'
 import { readConfig, saveConfig } from '../src/config'
+import { MeterError } from '../src/aggregate'
+import { fixture, config } from './schedule-fixtures'
+import { installSchedule } from '../src/schedule'
+import { schedulePaths } from '../src/schedule-builders'
 
 const homes: string[] = []
 afterEach(async () => {
@@ -107,3 +111,44 @@ it.each(['0', '36', '1.5', 'NaN'])(
     ).rejects.toThrow('1~35')
   },
 )
+
+it('rejects auto on without a token with a controlled connection instruction', async () => {
+  // Given
+  const { home, exec, self } = await fixture()
+  // When
+  const result = runCli(['auto', 'on'], { home, exec, self, env: {} })
+  // Then
+  await expect(result).rejects.toBeInstanceOf(MeterError)
+  await expect(result).rejects.toThrow('먼저 madefeed login')
+})
+it.each([['logout'], ['auto', 'off']])(
+  'keeps scheduler defaults inert for %j',
+  async (...args) => {
+    // Given
+    const { home, context, calls } = await fixture()
+    await saveConfig(home, config)
+    await installSchedule(context)
+    const plist = schedulePaths(context).plist
+    const before = await readFile(plist, 'utf8')
+    calls.length = 0
+    // When
+    await runCli(args, { home, env: {}, output: () => {} })
+    // Then
+    expect(calls).toEqual([])
+    expect(await readFile(plist, 'utf8')).toBe(before)
+  },
+)
+it('ignores unknown stored auto choices while preserving known choices', async () => {
+  // Given
+  const { home } = await fixture()
+  await saveConfig(home, { ...config, auto: 'off' })
+  expect((await readConfig(home))?.auto).toBe('off')
+  await writeFile(
+    join(home, '.config/madefeed/cli.json'),
+    JSON.stringify({ ...config, auto: 'unexpected' }),
+  )
+  // When
+  const saved = await readConfig(home)
+  // Then
+  expect(saved).toEqual(config)
+})

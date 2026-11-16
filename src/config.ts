@@ -7,6 +7,7 @@ export type Config = {
   readonly url: string
   readonly deviceToken: string
   readonly deviceName: string
+  readonly auto?: 'on' | 'off'
 }
 export function serviceUrl(value: string): string {
   let url: URL
@@ -49,6 +50,9 @@ export async function readConfig(home: string): Promise<Config | undefined> {
       url: serviceUrl(data['url']),
       deviceToken: data['deviceToken'],
       deviceName: data['deviceName'],
+      ...(data['auto'] === 'on' || data['auto'] === 'off'
+        ? { auto: data['auto'] }
+        : {}),
     }
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT')

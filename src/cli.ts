@@ -1,7 +1,7 @@
 import { realpathSync } from 'node:fs'
 import { homedir, hostname } from 'node:os'
 import { pathToFileURL } from 'node:url'
-import { parseArgs } from 'node:util'
+import { execFile } from 'node:child_process'
 import { aggregate, MeterError, payload } from './aggregate'
 import { requestDevice, pollToken, uploadUsage } from './api'
 import { logout, readConfig, saveConfig, serviceUrl } from './config'
@@ -10,54 +10,16 @@ import { readClaude } from './sources/claude'
 import { readCodex } from './sources/codex'
 import { readOpenCode } from './sources/opencode'
 import { readGemini } from './sources/gemini'
-
-const VERSION = '0.2.0'
-const help = `madefeed ${VERSION} — 토큰 미터예요.
-사용법: madefeed [login|upload|logout|status] [옵션]
-  --dry-run    전송 없이 합계와 정확한 요청 JSON을 출력해요.
-  --days N     오늘을 포함한 KST 일수예요. 기본 14, 최대 35예요.
-  --url URL    서버 주소예요. MADEFEED_URL 또는 https://madefeed.dev를 사용해요.
-  --json       기계가 읽을 JSON만 표준 출력으로 내보내요.
-  --help       도움말을 보여줘요.
-  --version    버전을 보여줘요.
-Claude Code, Codex, OpenCode, Gemini CLI를 읽어요.
-기본 실행은 로그인 후 사용량을 전송해요. Cursor는 unsupported예요.`
-
-type Runtime = {
-  readonly env?: Readonly<Record<string, string | undefined>>
-  readonly home?: string
-  readonly now?: number
-  readonly fetch?: typeof fetch
-  readonly output?: (text: string) => void
-  readonly diagnostic?: (text: string) => void
-  readonly sleep?: (ms: number) => Promise<void>
-}
+import { automatic, autoCommand } from './auto'
+import type { Runtime } from './cli-options'
+import { cliOptions, help, VERSION } from './cli-options'
+export type { Runtime } from './cli-options'
 
 export async function runCli(
   args: readonly string[],
   runtime: Runtime = {},
 ): Promise<void> {
-  let parsed: ReturnType<typeof parseArgs>
-  try {
-    parsed = parseArgs({
-      args: [...args],
-      allowPositionals: true,
-      options: {
-        'dry-run': { type: 'boolean' },
-        days: { type: 'string' },
-        url: { type: 'string' },
-        json: { type: 'boolean' },
-        help: { type: 'boolean' },
-        version: { type: 'boolean' },
-      },
-    })
-  } catch (error) {
-    if (error instanceof Error)
-      throw new MeterError(
-        '명령 옵션이 올바르지 않아요. --help를 확인해 주세요.',
-      )
-    throw error
-  }
+  const parsed = cliOptions(args)
   const { values, positionals } = parsed
   const output = runtime.output ?? console.log
   const diagnostic = runtime.diagnostic ?? console.error
@@ -74,17 +36,23 @@ export async function runCli(
     throw new MeterError('--days는 1~35 사이의 정수여야 해요.')
   const command = positionals[0] ?? 'upload'
   if (
-    positionals.length > 1 ||
-    !['login', 'upload', 'logout', 'status'].includes(command)
+    positionals.length > (command === 'auto' ? 2 : 1) ||
+    !['login', 'upload', 'logout', 'status', 'auto'].includes(command)
   )
     throw new MeterError('알 수 없는 명령이에요. --help를 확인해 주세요.')
   if (values['dry-run'] && command !== 'upload')
     throw new MeterError(
       '--dry-run은 기본 실행 또는 upload에서만 사용할 수 있어요.',
     )
+  if (values['scheduled'] && command !== 'upload')
+    throw new MeterError('--scheduled는 upload에서만 사용할 수 있어요.')
   const home = runtime.home ?? homedir()
   const env = runtime.env ?? process.env
+  const autoOptions = { runtime, home, env, diagnostic }
+  const auto = automatic(autoOptions)
+  if (values['scheduled']) await auto.trim()
   if (command === 'logout') {
+    await auto.remove()
     await logout(home)
     output(
       values['json']
@@ -93,7 +61,29 @@ export async function runCli(
     )
     return
   }
-  const config = await readConfig(home)
+  let config
+  try {
+    config = await readConfig(home)
+  } catch (error) {
+    if (values['scheduled'] && error instanceof MeterError) {
+      output('연결된 기기 토큰이 없어 자동 전송을 건너뛰었어요.')
+      return
+    }
+    throw error
+  }
+  if (command === 'auto') {
+    const state = await autoCommand(
+      positionals[1] ?? 'status',
+      config,
+      autoOptions,
+    )
+    output(
+      values['json']
+        ? JSON.stringify(state)
+        : `자동 전송: ${state.enabled ? `켜져 있어요 (${state.kind}).` : '꺼져 있어요.'}`,
+    )
+    return
+  }
   const chosen =
     values['url'] ??
     env['MADEFEED_URL'] ??
@@ -104,13 +94,23 @@ export async function runCli(
   const url = serviceUrl(chosen)
   // Never send a token to an origin other than the origin that issued it.
   const configured = config?.url === url ? config : undefined
+  if (values['scheduled'] && !configured) {
+    output('연결된 기기 토큰이 없어 자동 전송을 건너뛰었어요.')
+    return
+  }
   const deviceName =
     configured?.deviceName ??
     hostname()
       .replace(/[^A-Za-z0-9._-]/g, '-')
       .slice(0, 80)
   if (command === 'status') {
-    const status = { loggedIn: Boolean(configured), url, deviceName }
+    const state = await auto.status()
+    const status = {
+      loggedIn: Boolean(configured),
+      url,
+      deviceName,
+      auto: state,
+    }
     output(
       values['json']
         ? JSON.stringify(status)
@@ -118,6 +118,10 @@ export async function runCli(
           ? '기기에 로그인 정보가 있어요. 서버 연결은 전송할 때 확인해요.'
           : '아직 로그인하지 않았어요. login으로 연결해 주세요.',
     )
+    if (!values['json'])
+      output(
+        `자동 전송: ${state.enabled ? `켜져 있어요 (${state.kind}).` : '꺼져 있어요.'}`,
+      )
     return
   }
   const now = runtime.now ?? Date.now()
@@ -157,7 +161,8 @@ export async function runCli(
     return
   }
   let token = configured?.deviceToken
-  if (command === 'login' || !token) {
+  let saved = configured
+  if (!values['scheduled'] && (command === 'login' || !token)) {
     const device = await requestDevice(api, deviceName)
     // Authentication instructions go to stderr in machine mode; never emit device_code/token.
     const instructions = values['json'] ? diagnostic : output
@@ -165,8 +170,22 @@ export async function runCli(
       `브라우저에서 ${device.verification_uri} 주소를 열고 ${device.user_code} 코드를 입력해 주세요.`,
     )
     token = await pollToken(api, device)
-    await saveConfig(home, { url, deviceName, deviceToken: token })
+    saved = {
+      url,
+      deviceName,
+      deviceToken: token,
+      ...(config?.auto ? { auto: config.auto } : {}),
+    }
+    await saveConfig(home, saved)
   }
+  if (
+    !values['scheduled'] &&
+    !values['no-auto'] &&
+    env['MADEFEED_NO_AUTO'] !== '1' &&
+    saved &&
+    saved.auto !== 'off'
+  )
+    await auto.install(saved)
   if (command === 'login') {
     output(
       values['json']
@@ -175,11 +194,14 @@ export async function runCli(
     )
     return
   }
+  if (!token) return
   const result = await uploadUsage(api, token, body)
   output(
-    values['json']
-      ? JSON.stringify(result)
-      : `${result.accepted}개 사용량 합계를 전송했어요.`,
+    values['scheduled']
+      ? `${new Date(now).toISOString()} ${result.accepted}개 사용량 합계를 전송했어요.`
+      : values['json']
+        ? JSON.stringify(result)
+        : `${result.accepted}개 사용량 합계를 전송했어요.`,
   )
 }
 
@@ -197,7 +219,27 @@ function invokedDirectly(): boolean {
 }
 
 if (invokedDirectly()) {
-  runCli(process.argv.slice(2)).catch((error: unknown) => {
+  const entry = process.argv[1]
+  const exec: NonNullable<Runtime['exec']> = (file, args, options) =>
+    new Promise((resolve, reject) => {
+      const child = execFile(
+        file,
+        [...args],
+        { encoding: 'utf8' },
+        (error, stdout) => {
+          if (error) reject(error)
+          else resolve({ stdout })
+        },
+      )
+      child.stdin?.on('error', (error: Error) => reject(error))
+      child.stdin?.end(options?.input)
+    })
+  runCli(process.argv.slice(2), {
+    exec,
+    ...(entry ? { self: realpathSync(entry) } : {}),
+    platform: process.platform,
+    ...(process.getuid ? { uid: process.getuid() } : {}),
+  }).catch((error: unknown) => {
     // Only controlled errors reach output: filesystem/network errors can contain private paths.
     const message =
       error instanceof MeterError
