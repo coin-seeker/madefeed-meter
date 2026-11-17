@@ -8,7 +8,7 @@ it.each(['revoked', 'unreachable', 'different-origin'])(
   'orders re-login safely when %s',
   async (scenario) => {
     // Given
-    const { runtime, home } = await cliFixture()
+    const { runtime, home, diagnostic } = await cliFixture()
     await saveConfig(home, {
       ...config,
       deviceToken: 'mfd_old',
@@ -52,6 +52,13 @@ it.each(['revoked', 'unreachable', 'different-origin'])(
       deviceToken: 'mfd_test',
       backfill: 'done',
     })
+    expect(diagnostic).toEqual(
+      scenario === 'unreachable'
+        ? [
+            `이전 기기 연결을 끊지 못했어요. ${config.url}/meter 에서 이전 기기 연결을 끊어 주세요.`,
+          ]
+        : [],
+    )
   },
 )
 
@@ -94,6 +101,6 @@ it('prints the connected line followed by the login upload result', async () => 
   // Then
   expect(output.at(-2)).toMatch(/ 기기를 연결했어요\.$/)
   expect(output.at(-1)).toBe(
-    '사용량 2건을 올렸어요. 새로 받은 표 1표.\n처음 연결이라 지난 30일 사용량도 합산했어요.\n누적 표 4표.',
+    '사용량 2건을 올렸어요. 새로 받은 표 1표.\n지난 30일 사용량도 한 번 합산했어요.\n누적 표 4표.',
   )
 })

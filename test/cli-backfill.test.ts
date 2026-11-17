@@ -150,7 +150,7 @@ it.each(['applied', 'closed', null])(
     expect(output.join('\n')).toContain('누적 표 7표.')
     if (backfill === 'applied')
       expect(output.join('\n')).toContain(
-        '처음 연결이라 지난 30일 사용량도 합산했어요.',
+        '지난 30일 사용량도 한 번 합산했어요.',
       )
     if (backfill === 'closed')
       expect(output.join('\n')).toContain(

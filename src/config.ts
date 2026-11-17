@@ -83,6 +83,14 @@ export async function saveConfig(home: string, config: Config): Promise<void> {
     await rm(temporary, { force: true })
   }
 }
+export async function markBackfillDone(
+  home: string,
+  deviceToken: string,
+): Promise<void> {
+  const current = await readConfig(home)
+  if (current?.deviceToken === deviceToken && current.backfill !== 'done')
+    await saveConfig(home, { ...current, backfill: 'done' })
+}
 export async function logout(home: string): Promise<void> {
   await rm(join(home, '.config/madefeed/cli.json'), { force: true })
   try {

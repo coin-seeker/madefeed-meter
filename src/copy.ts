@@ -38,6 +38,8 @@ export const logoutRevoked =
 export const logoutLocal = '이 컴퓨터의 연결 정보와 자동 전송을 지웠어요.'
 export const logoutUnreachable = (url: string) =>
   `이 컴퓨터의 연결 정보와 자동 전송은 지웠어요. 서버에는 닿지 못했으니 ${url}/meter 에서 이 기기 연결을 끊어 주세요.`
+export const reloginUnreachable = (url: string) =>
+  `이전 기기 연결을 끊지 못했어요. ${url}/meter 에서 이전 기기 연결을 끊어 주세요.`
 export const scheduledDisconnected = (now: number) =>
   `${new Date(now).toISOString()} 서버에서 이 기기 연결이 끊겨 자동 전송을 해제하고 연결 정보를 지웠어요.`
 export const connected = (deviceName: string) =>
@@ -61,7 +63,7 @@ export function uploadResult(result: UploadResult): string {
   ]
   switch (result.backfill) {
     case 'applied':
-      lines.push('처음 연결이라 지난 30일 사용량도 합산했어요.')
+      lines.push('지난 30일 사용량도 한 번 합산했어요.')
       break
     case 'closed':
       lines.push(

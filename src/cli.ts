@@ -10,7 +10,7 @@ import {
   revokeDevice,
   uploadUsage,
 } from './api'
-import { readConfig, saveConfig, serviceUrl } from './config'
+import { markBackfillDone, readConfig, saveConfig, serviceUrl } from './config'
 import { kstDateOf, windowStart } from './kst'
 import { sourceReaders } from './sources'
 import { automatic, autoCommand } from './auto'
@@ -139,7 +139,11 @@ export async function runCli(
     const instructions = values['json'] ? diagnostic : output
     for (const line of copy.approval(device)) instructions(line)
     token = await pollToken(api, device)
-    if (configured) await revokeDevice(api, configured.deviceToken)
+    if (
+      configured &&
+      (await revokeDevice(api, configured.deviceToken)) === 'unreachable'
+    )
+      diagnostic(copy.reloginUnreachable(url))
     saved = {
       url,
       deviceName,
@@ -157,10 +161,8 @@ export async function runCli(
     env['MADEFEED_NO_AUTO'] !== '1' &&
     saved &&
     saved.auto !== 'off'
-  ) {
+  )
     await auto.install(saved)
-    saved = { ...saved, ...(await readConfig(home)) }
-  }
   const options = { home, sinceMs: windowStart(now, backfill ? 30 : days), env }
   // Dry-run gathers without authentication or any network requests.
   const sources = await Promise.all(sourceReaders.map((read) => read(options)))
@@ -198,7 +200,7 @@ export async function runCli(
     })
     return
   }
-  if (saved) await saveConfig(home, { ...saved, backfill: 'done' })
+  if (saved?.backfill !== 'done') await markBackfillDone(home, token)
   output(
     values['scheduled']
       ? copy.scheduledUpload(now, result)
