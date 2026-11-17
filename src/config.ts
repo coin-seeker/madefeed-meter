@@ -17,6 +17,7 @@ export type Config = {
   readonly deviceToken: string
   readonly deviceName: string
   readonly auto?: 'on' | 'off'
+  readonly backfill?: 'done'
 }
 export function serviceUrl(value: string): string {
   let url: URL
@@ -56,6 +57,7 @@ export async function readConfig(home: string): Promise<Config | undefined> {
       url: serviceUrl(data['url']),
       deviceToken: data['deviceToken'],
       deviceName: data['deviceName'],
+      ...(data['backfill'] === 'done' ? { backfill: 'done' as const } : {}),
       ...(data['auto'] === 'on' || data['auto'] === 'off'
         ? { auto: data['auto'] }
         : {}),

@@ -19,7 +19,13 @@ it('sends exactly one heartbeat request when rows are empty', async () => {
   const result = await uploadUsage(api, 'mfd_test', payload('test-device', []))
   // Then
   expect(bodies).toEqual([{ deviceName: 'test-device', rows: [] }])
-  expect(result).toEqual({ accepted: 0, weekTokens: 12, votesGranted: 0 })
+  expect(result).toEqual({
+    accepted: 0,
+    ignored: 0,
+    backfill: null,
+    weekTokens: 12,
+    votesGranted: 0,
+  })
 })
 afterEach(async () => {
   for (const close of cleanup.splice(0)) await close()
@@ -162,3 +168,64 @@ it.each([401, 422])('reports HTTP %i without retrying', async (status) => {
   ).rejects.toThrow(String(status))
   expect(calls).toBe(1)
 })
+
+it.each([
+  { statuses: ['closed', 'applied', null], expected: 'applied' },
+  { statuses: ['applied', 'closed', null], expected: 'applied' },
+  { statuses: [null, 'closed', null], expected: 'closed' },
+  { statuses: [null, null, null], expected: null },
+])(
+  'aggregates all backfill chunks with $statuses',
+  async ({ statuses, expected }) => {
+    // Given
+    const bodies: unknown[] = []
+    const api = {
+      url: 'https://example.com',
+      fetch: async (
+        _input: Parameters<typeof fetch>[0],
+        init?: RequestInit,
+      ) => {
+        const index = bodies.length
+        bodies.push(JSON.parse(String(init?.body)))
+        return Response.json({
+          accepted: index + 1,
+          ignored: index + 2,
+          backfill: statuses[index],
+          weekTokens: index * 10,
+          votesGranted: index,
+          bankVotes: index + 5,
+        })
+      },
+    }
+    const rows = Array.from({ length: 401 }, (_, index) => ({
+      date: '2026-11-16',
+      tool: 'codex' as const,
+      model: `model-${index}`,
+      tokens: 1,
+    }))
+    // When
+    const result = await uploadUsage(api, 'mfd_test', {
+      ...payload('device', rows),
+      backfill: true,
+    })
+    // Then
+    expect(bodies).toEqual(
+      [0, 200, 400].map(() => ({
+        deviceName: 'device',
+        rows: expect.any(Array),
+        backfill: true,
+      })),
+    )
+    expect(
+      bodies.map((body) => JSON.stringify(body).match(/"date"/g)?.length),
+    ).toEqual([200, 200, 1])
+    expect(result).toEqual({
+      accepted: 6,
+      ignored: 9,
+      backfill: expected,
+      votesGranted: 3,
+      weekTokens: 20,
+      bankVotes: 7,
+    })
+  },
+)

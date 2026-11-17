@@ -17,6 +17,9 @@ export type Device = {
 }
 export type UploadResult = {
   readonly accepted: number
+  readonly ignored: number
+  readonly backfill: 'applied' | 'closed' | null
+  readonly bankVotes?: number
   readonly weekTokens: number
   readonly votesGranted: number
 }
@@ -174,11 +177,14 @@ function responseNumber(value: unknown): number {
 export async function uploadUsage(
   api: Api,
   token: string,
-  body: UsagePayload,
+  body: UsagePayload & { readonly backfill?: true },
 ): Promise<UploadResult> {
   let accepted = 0
   let weekTokens = 0
   let votesGranted = 0
+  let ignored = 0
+  let backfill: UploadResult['backfill'] = null
+  let bankVotes: number | undefined
   const safe = payload(body.deviceName, body.rows)
   let offset = 0
   do {
@@ -188,6 +194,7 @@ export async function uploadUsage(
       body: {
         deviceName: safe.deviceName,
         rows: safe.rows.slice(offset, offset + 200),
+        ...(body.backfill ? { backfill: true } : {}),
       },
     })
     if (status === 401 && record(data['error'])['code'] === 'unauthorized')
@@ -196,7 +203,32 @@ export async function uploadUsage(
     accepted += responseNumber(data['accepted'])
     weekTokens = responseNumber(data['weekTokens'])
     votesGranted += responseNumber(data['votesGranted'])
+    ignored += responseNumber(data['ignored'] ?? 0)
+    bankVotes =
+      data['bankVotes'] === undefined
+        ? undefined
+        : responseNumber(data['bankVotes'])
+    switch (data['backfill']) {
+      case 'applied':
+        backfill = 'applied'
+        break
+      case 'closed':
+        backfill ??= 'closed'
+        break
+      case undefined:
+      case null:
+        break
+      default:
+        throw new MeterError('사용량 저장 응답이 올바르지 않아요.')
+    }
     offset += 200
   } while (offset < safe.rows.length)
-  return { accepted, weekTokens, votesGranted }
+  return {
+    accepted,
+    ignored,
+    backfill,
+    weekTokens,
+    votesGranted,
+    ...(bankVotes === undefined ? {} : { bankVotes }),
+  }
 }

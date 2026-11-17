@@ -3,13 +3,16 @@ import { homedir, hostname } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import { execFile } from 'node:child_process'
 import { aggregate, MeterError, payload } from './aggregate'
-import { DisconnectedError, requestDevice, pollToken, uploadUsage } from './api'
+import {
+  DisconnectedError,
+  requestDevice,
+  pollToken,
+  revokeDevice,
+  uploadUsage,
+} from './api'
 import { readConfig, saveConfig, serviceUrl } from './config'
 import { kstDateOf, windowStart } from './kst'
-import { readClaude } from './sources/claude'
-import { readCodex } from './sources/codex'
-import { readOpenCode } from './sources/opencode'
-import { readGemini } from './sources/gemini'
+import { sourceReaders } from './sources'
 import { automatic, autoCommand } from './auto'
 import type { Runtime } from './cli-options'
 import { cliOptions, help, VERSION } from './cli-options'
@@ -116,22 +119,51 @@ export async function runCli(
     return
   }
   const now = runtime.now ?? Date.now()
-  const options = { home, sinceMs: windowStart(now, days), env }
   const api = {
     url,
     fetch: runtime.fetch ?? fetch,
     ...(runtime.sleep ? { sleep: runtime.sleep } : {}),
   }
-  // Gather before authentication: dry-run never requests or polls a device code.
-  const sources =
-    command === 'upload'
-      ? await Promise.all([
-          readClaude(options),
-          readCodex(options),
-          readOpenCode(options),
-          readGemini(options),
-        ])
-      : []
+  let token = configured?.deviceToken
+  let saved = configured
+  const backfill =
+    !values['dry-run'] &&
+    (command === 'login' || configured?.backfill !== 'done')
+  if (
+    !values['dry-run'] &&
+    !values['scheduled'] &&
+    (command === 'login' || !token)
+  ) {
+    const device = await requestDevice(api, deviceName)
+    // Machine output contains one result only; approval instructions belong on stderr.
+    const instructions = values['json'] ? diagnostic : output
+    for (const line of copy.approval(device)) instructions(line)
+    token = await pollToken(api, device)
+    if (configured) await revokeDevice(api, configured.deviceToken)
+    saved = {
+      url,
+      deviceName,
+      deviceToken: token,
+      ...(config?.auto ? { auto: config.auto } : {}),
+      ...(configured?.backfill ? { backfill: configured.backfill } : {}),
+    }
+    await saveConfig(home, saved)
+    instructions(copy.connected(deviceName))
+  }
+  if (
+    !values['dry-run'] &&
+    !values['scheduled'] &&
+    !values['no-auto'] &&
+    env['MADEFEED_NO_AUTO'] !== '1' &&
+    saved &&
+    saved.auto !== 'off'
+  ) {
+    await auto.install(saved)
+    saved = { ...saved, ...(await readConfig(home)) }
+  }
+  const options = { home, sinceMs: windowStart(now, backfill ? 30 : days), env }
+  // Dry-run gathers without authentication or any network requests.
+  const sources = await Promise.all(sourceReaders.map((read) => read(options)))
   for (const source of sources) if (source.reason) diagnostic(source.reason)
   const rows = aggregate(
     sources
@@ -151,44 +183,13 @@ export async function runCli(
     output(JSON.stringify(body, null, values['json'] ? undefined : 2))
     return
   }
-  let token = configured?.deviceToken
-  let saved = configured
-  if (!values['scheduled'] && (command === 'login' || !token)) {
-    const device = await requestDevice(api, deviceName)
-    // Authentication instructions go to stderr in machine mode; never emit device_code/token.
-    const instructions = values['json'] ? diagnostic : output
-    for (const line of copy.approval(device)) instructions(line)
-    token = await pollToken(api, device)
-    saved = {
-      url,
-      deviceName,
-      deviceToken: token,
-      ...(config?.auto ? { auto: config.auto } : {}),
-    }
-    await saveConfig(home, saved)
-    if (command !== 'login') instructions(copy.connected(deviceName))
-  }
-  if (
-    !values['scheduled'] &&
-    !values['no-auto'] &&
-    env['MADEFEED_NO_AUTO'] !== '1' &&
-    saved &&
-    saved.auto !== 'off'
-  )
-    await auto.install(saved)
-  if (command === 'login') {
-    if (values['json']) diagnostic(copy.connected(deviceName))
-    output(
-      values['json']
-        ? JSON.stringify({ loggedIn: true })
-        : copy.connected(deviceName),
-    )
-    return
-  }
   if (!token) return
   let result
   try {
-    result = await uploadUsage(api, token, body)
+    result = await uploadUsage(api, token, {
+      ...body,
+      ...(backfill ? { backfill: true as const } : {}),
+    })
   } catch (error) {
     if (!(error instanceof DisconnectedError)) throw error
     await cleanDisconnected(session, {
@@ -197,11 +198,15 @@ export async function runCli(
     })
     return
   }
+  if (saved) await saveConfig(home, { ...saved, backfill: 'done' })
   output(
     values['scheduled']
-      ? copy.scheduledUpload(now, result.accepted)
+      ? copy.scheduledUpload(now, result)
       : values['json']
-        ? JSON.stringify(result)
+        ? JSON.stringify({
+            ...(command === 'login' ? { loggedIn: true } : {}),
+            ...result,
+          })
         : copy.uploadResult(result),
   )
 }

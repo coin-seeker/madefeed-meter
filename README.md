@@ -10,10 +10,16 @@ npx @the-seeker/madefeed@latest
 
 처음 실행하면 브라우저에서 기기를 연결하고, 이어서 사용량을 올려요. Node.js 22.13 이상이 필요해요.
 
+첫 연결에서는 `--days`와 관계없이 오늘 포함 지난 30일(KST)의 사용량을 올려요. 연결 전 기록 합산은 **계정당 한 번**이에요. 다시 연결해도 이미 합산한 과거 기록은 중복으로 더하지 않아요. 같은 서버에 다시 로그인하면 새 토큰을 받은 뒤 이전 기기 연결부터 해제해요. 이전 버전에서 연결한 기기도 다음 실제 전송(예약 전송 포함)에서 30일 합산을 한 번 시도해요. 서버가 합산을 마감했어도 이후에는 평소 기간으로 전송해요. `--dry-run`은 네트워크 요청 없이 지정한 `--days` 기간만 보여주며, 첫 합산 상태를 바꾸지 않아요.
+
+전송 결과에는 제외한 기록 수(있을 때), 지난 사용량 합산 여부, 남은 **누적 표**가 표시돼요. 누적 표는 쓰기 전까지 남아 있는 투표 잔액이에요. 예전 서버가 잔액을 보내지 않으면 표시하지 않아요.
+
+`login --json`은 연결과 전송을 마친 뒤 표준 출력에 JSON 객체 하나만 출력해요. 예: `{"loggedIn":true,"accepted":12,"ignored":0,"backfill":"applied","weekTokens":3000000,"votesGranted":3,"bankVotes":3}`. 연결 안내는 표준 오류로 나가요. `upload --json`은 `loggedIn` 없이 같은 전송 결과를 출력해요. 예전 서버에서는 `ignored`는 `0`, `backfill`은 `null`이고 `bankVotes`는 생략돼요.
+
 | 명령 | 하는 일 |
 | --- | --- |
 | `npx @the-seeker/madefeed@latest` 또는 `npx @the-seeker/madefeed@latest upload` | 연결이 없으면 연결하고, 사용량을 올려요. |
-| `npx @the-seeker/madefeed@latest login` | 기기만 연결해요. |
+| `npx @the-seeker/madefeed@latest login` | 기기를 연결하고 지난 30일 사용량을 올려요. |
 | `npx @the-seeker/madefeed@latest status` | 연결과 자동 전송 상태를 보여줘요. |
 | `npx @the-seeker/madefeed@latest auto [status]` | 자동 전송 상태를 보여줘요. `--json`도 지원해요. |
 | `npx @the-seeker/madefeed@latest auto on` | 연결된 기기의 자동 전송을 켜요. |
