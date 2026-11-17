@@ -72,7 +72,7 @@ export function uploadResult(result: UploadResult): string {
       break
     case 'closed':
       lines.push(
-        '이 계정은 지난 사용량을 이미 한 번 합산해서, 연결 전 기록은 빼고 올렸어요.',
+        '이 계정이나 이 컴퓨터는 지난 사용량을 이미 한 번 합산해서, 연결 전 기록은 빼고 올렸어요.',
       )
       break
     case null:
