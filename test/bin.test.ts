@@ -19,7 +19,7 @@ let dir = ''
 beforeAll(async () => {
   dir = await mkdtemp(join(tmpdir(), 'madefeed-bin-'))
   await build({
-    entryPoints: [fileURLToPath(new URL('../src/cli.ts', import.meta.url))],
+    entryPoints: [fileURLToPath(new URL('../src/bin.ts', import.meta.url))],
     bundle: true,
     platform: 'node',
     format: 'esm',

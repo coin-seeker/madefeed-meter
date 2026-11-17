@@ -49,6 +49,7 @@ it('prints diagnostics and one timestamped result while uploading only the three
   expect(bodies).toEqual([
     {
       deviceName: config.deviceName,
+      machineId: 'a'.repeat(64),
       rows: [
         {
           date: '2026-11-16',

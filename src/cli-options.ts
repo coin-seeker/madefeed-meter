@@ -11,9 +11,10 @@ export type Runtime = AutoRuntime & {
   readonly output?: (text: string) => void
   readonly diagnostic?: (text: string) => void
   readonly sleep?: (ms: number) => Promise<void>
+  readonly machineId?: () => Promise<string>
 }
 
-export const VERSION = '0.4.0'
+export const VERSION = '0.5.0'
 export const help = helpText(VERSION)
 
 export function cliOptions(args: readonly string[]) {

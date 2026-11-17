@@ -50,6 +50,7 @@ it.each(['login', 'upload'])(
     expect(bodies).toEqual([
       {
         deviceName: expect.any(String),
+        machineId: 'a'.repeat(64),
         backfill: true,
         rows: expect.arrayContaining([
           {
@@ -95,6 +96,7 @@ it.each([[], ['--scheduled']])(
       {
         deviceName: config.deviceName,
         backfill: true,
+        machineId: 'a'.repeat(64),
         rows: [
           { date: '2026-11-12', tool: 'gemini', model: 'old', tokens: 99 },
           {
@@ -107,6 +109,7 @@ it.each([[], ['--scheduled']])(
       },
       {
         deviceName: config.deviceName,
+        machineId: 'a'.repeat(64),
         rows: [
           {
             date: '2026-11-16',

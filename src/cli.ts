@@ -1,7 +1,5 @@
-import { realpathSync } from 'node:fs'
 import { homedir, hostname } from 'node:os'
-import { pathToFileURL } from 'node:url'
-import { execFile } from 'node:child_process'
+import { optionalMachineId } from './machine-id'
 import { aggregate, MeterError, payload } from './aggregate'
 import {
   DisconnectedError,
@@ -125,6 +123,9 @@ export async function runCli(
     ...(runtime.sleep ? { sleep: runtime.sleep } : {}),
   }
   let token = configured?.deviceToken
+  const machine = values['dry-run']
+    ? undefined
+    : await optionalMachineId(runtime.machineId)
   let saved = configured
   const backfill =
     !values['dry-run'] &&
@@ -134,7 +135,8 @@ export async function runCli(
     !values['scheduled'] &&
     (command === 'login' || !token)
   ) {
-    const device = await requestDevice(api, deviceName)
+    if (!machine) throw new MeterError(copy.machineIdUnavailable)
+    const device = await requestDevice(api, { deviceName, machineId: machine })
     // Machine output contains one result only; approval instructions belong on stderr.
     const instructions = values['json'] ? diagnostic : output
     for (const line of copy.approval(device)) instructions(line)
@@ -191,6 +193,7 @@ export async function runCli(
     result = await uploadUsage(api, token, {
       ...body,
       ...(backfill ? { backfill: true as const } : {}),
+      ...(machine ? { machineId: machine } : {}),
     })
   } catch (error) {
     if (!(error instanceof DisconnectedError)) throw error
@@ -211,49 +214,4 @@ export async function runCli(
           })
         : copy.uploadResult(result),
   )
-}
-
-// npm runs the bin through a symlink (node_modules/.bin/madefeed), so compare
-// real paths; a missing or unreadable argv[1] means this file was imported.
-function invokedDirectly(): boolean {
-  const entry = process.argv[1]
-  if (!entry) return false
-  try {
-    return import.meta.url === pathToFileURL(realpathSync(entry)).href
-  } catch (error) {
-    if (error instanceof Error) return false
-    throw error
-  }
-}
-
-if (invokedDirectly()) {
-  const entry = process.argv[1]
-  const exec: NonNullable<Runtime['exec']> = (file, args, options) =>
-    new Promise((resolve, reject) => {
-      const child = execFile(
-        file,
-        [...args],
-        { encoding: 'utf8' },
-        (error, stdout) => {
-          if (error) reject(error)
-          else resolve({ stdout })
-        },
-      )
-      child.stdin?.on('error', (error: Error) => reject(error))
-      child.stdin?.end(options?.input)
-    })
-  runCli(process.argv.slice(2), {
-    exec,
-    ...(entry ? { self: realpathSync(entry) } : {}),
-    platform: process.platform,
-    ...(process.getuid ? { uid: process.getuid() } : {}),
-  }).catch((error: unknown) => {
-    // Only controlled errors reach output: filesystem/network errors can contain private paths.
-    const message =
-      error instanceof MeterError ? error.message : copy.localFailure
-    if (process.argv.includes('--json'))
-      console.error(JSON.stringify({ error: message }))
-    else console.error(message)
-    process.exitCode = 1
-  })
 }

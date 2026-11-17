@@ -44,6 +44,7 @@ export async function cliFixture() {
       diagnostic.push(text)
     },
     sleep: async () => {},
+    machineId: async () => 'a'.repeat(64),
     fetch: async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       const url = String(input)
       requests.push(url)

@@ -81,7 +81,10 @@ it('polls the device flow pending → approved at the supplied interval', async 
       waits.push(ms)
     },
   }
-  const device = await requestDevice(api, 'test-device')
+  const device = await requestDevice(api, {
+    deviceName: 'test-device',
+    machineId: 'a'.repeat(64),
+  })
   // When
   const token = await pollToken(api, device)
   // Then
@@ -139,13 +142,21 @@ it('chunks uploads to 200 rows and projects only private-safe fields', async () 
     path: '/Users/x/secret-repo',
   }))
   // When
-  await uploadUsage({ url, fetch }, 'mfd_test', payload('test-device', rows))
+  await uploadUsage({ url, fetch }, 'mfd_test', {
+    ...payload('test-device', rows),
+    machineId: 'b'.repeat(64),
+  })
   // Then
   expect(
     bodies.map((body) => JSON.stringify(body).match(/"date"/g)?.length),
   ).toEqual([200, 200, 1])
   expect(JSON.stringify(bodies)).not.toMatch(
     /SECRET-PROMPT|secret-repo|prompt|path/,
+  )
+  expect(bodies).toEqual(
+    Array.from({ length: 3 }, () =>
+      expect.objectContaining({ machineId: 'b'.repeat(64) }),
+    ),
   )
 })
 it.each([401, 422])('reports HTTP %i without retrying', async (status) => {

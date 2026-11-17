@@ -1,13 +1,19 @@
 import { setTimeout } from 'node:timers/promises'
 import { MeterError, record, payload } from './aggregate'
 import type { UsagePayload } from './aggregate'
-import { apiFailure, expiredCode, invalidCode } from './copy'
+import { ApiError, post } from './api-http'
+import type { Api } from './api-http'
+export { ApiError } from './api-http'
+export type { Api } from './api-http'
+import {
+  accessDenied,
+  apiFailure,
+  expiredCode,
+  invalidCode,
+  machineIdUnavailable,
+  upgradeRequired,
+} from './copy'
 
-export type Api = {
-  readonly url: string
-  readonly fetch: typeof fetch
-  readonly sleep?: (ms: number) => Promise<void>
-}
 export type Device = {
   readonly device_code: string
   readonly user_code: string
@@ -24,53 +30,23 @@ export type UploadResult = {
   readonly votesGranted: number
 }
 
-export class ApiError extends MeterError {
-  constructor(readonly status: number) {
-    super(apiFailure(status))
-  }
-}
 export class DisconnectedError extends MeterError {}
-type Post = {
-  readonly path: string
-  readonly body: unknown
-  readonly token?: string
-}
-async function post(
-  api: Api,
-  request: Post,
-): Promise<{
-  readonly status: number
-  readonly data: Record<string, unknown>
-}> {
-  try {
-    const response = await api.fetch(`${api.url}${request.path}`, {
-      method: 'POST',
-      redirect: 'error',
-      signal: AbortSignal.timeout(15_000),
-      headers: {
-        'content-type': 'application/json',
-        ...(request.token ? { authorization: `Bearer ${request.token}` } : {}),
-      },
-      body: JSON.stringify(request.body),
-    })
-    const data: unknown = await response.json()
-    return { status: response.status, data: record(data) }
-  } catch (error) {
-    if (error instanceof Error)
-      throw new MeterError(
-        '네트워크 연결 또는 서버 응답을 확인해 주세요. 자동 재전송하지 않아요.',
-      )
-    throw error
-  }
-}
 export async function requestDevice(
   api: Api,
-  deviceName: string,
+  device: { readonly deviceName: string; readonly machineId: string },
 ): Promise<Device> {
+  if (!/^[0-9a-f]{64}$/.test(device.machineId))
+    throw new MeterError(machineIdUnavailable)
   const { status, data } = await post(api, {
     path: '/api/meter/device',
-    body: { deviceName },
+    body: { deviceName: device.deviceName, machineId: device.machineId },
   })
+  if (
+    status === 400 &&
+    (data['error'] === 'upgrade_required' ||
+      record(data['error'])['code'] === 'upgrade_required')
+  )
+    throw new MeterError(upgradeRequired)
   if (status !== 200) throw new ApiError(status)
   const code = data['device_code']
   const user = data['user_code']
@@ -144,6 +120,8 @@ export async function pollToken(api: Api, device: Device): Promise<string> {
         throw new MeterError(expiredCode)
       case 'invalid_grant':
         throw new MeterError(invalidCode)
+      case 'access_denied':
+        throw new MeterError(accessDenied)
       default:
         throw new ApiError(status)
     }
@@ -177,7 +155,10 @@ function responseNumber(value: unknown): number {
 export async function uploadUsage(
   api: Api,
   token: string,
-  body: UsagePayload & { readonly backfill?: true },
+  body: UsagePayload & {
+    readonly backfill?: true
+    readonly machineId?: string
+  },
 ): Promise<UploadResult> {
   let accepted = 0
   let weekTokens = 0
@@ -195,6 +176,7 @@ export async function uploadUsage(
         deviceName: safe.deviceName,
         rows: safe.rows.slice(offset, offset + 200),
         ...(body.backfill ? { backfill: true } : {}),
+        ...(body.machineId ? { machineId: body.machineId } : {}),
       },
     })
     if (status === 401 && record(data['error'])['code'] === 'unauthorized')

@@ -3,6 +3,11 @@ import type { Config } from './config'
 import type { ScheduleStatus } from './schedule'
 
 export const RUN = 'npx @the-seeker/madefeed@latest'
+export const machineIdUnavailable =
+  '컴퓨터 식별값을 읽지 못해 연결하지 못했어요. 운영체제의 식별값과 접근 권한을 확인한 뒤 다시 시도해 주세요.'
+export const accessDenied =
+  '이 컴퓨터는 다른 계정에 연결돼 있거나 미터 사용이 제한돼 있어 연결하지 못했어요. 다른 계정에서 먼저 연결을 끊고(logout) 다시 시도해 주세요.'
+export const upgradeRequired = `새 연결에는 최신 토큰 미터가 필요해요. ${RUN} 를 실행해 주세요.`
 export const setupFailure = `자동 전송을 등록하지 못했어요. ${RUN} 로 직접 올릴 수 있어요.`
 // Names the command for the scope that failed: retrying logout after a failed
 // auto off would also disconnect the device.
@@ -115,6 +120,8 @@ export function helpText(version: string): string {
   --version    버전을 보여줘요.
 
 지난 사용량 합산은 계정당 한 번이며, 결과에 남은 누적 표를 보여줘요.
+컴퓨터 식별값의 해시를 보내며, 한 컴퓨터는 한 번에 한 계정에만 연결할 수 있어요.
+계정을 바꾸려면 이전 계정에서 먼저 logout을 실행해 주세요.
 login --json은 loggedIn과 전송 결과를 담은 JSON 객체 하나를 출력해요.
 읽는 도구: Claude Code, Codex, OpenCode, Gemini CLI (Cursor는 아직 지원하지 않아요)`
 }
