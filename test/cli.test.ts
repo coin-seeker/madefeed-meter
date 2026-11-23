@@ -17,7 +17,7 @@ it('lists all supported tools and explains versioned history in help', async () 
   // When
   await runCli(['--help'], { output: (text) => output.push(text) })
   // Then
-  expect(output.join('')).toContain('Pi, oh-my-pi, OmO, Antigravity')
+  expect(output.join('')).toContain('Pi, oh-my-pi, OmO, Antigravity, Hermes')
   expect(output.join('')).toContain(
     '더 많은 기록을 읽는 버전에서는 지난 30일을 한 번 다시 합산해요.',
   )
