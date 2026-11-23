@@ -15,6 +15,7 @@ export type Tool =
   | 'omp'
   | 'omo'
   | 'agy'
+  | 'hermes'
 export const MAX_ROW_TOKENS = 100_000_000_000
 export type UsageRow = {
   readonly date: string
