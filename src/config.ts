@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { MeterError, parseJson, record } from './aggregate'
 import { invalidConfig, invalidUrl, unsafeUrl } from './copy'
+import { backfillLevel } from './backfill'
 
 export type Config = {
   readonly url: string
@@ -18,6 +19,7 @@ export type Config = {
   readonly deviceName: string
   readonly auto?: 'on' | 'off'
   readonly backfill?: 'done'
+  readonly backfillRevision?: number
 }
 export function serviceUrl(value: string): string {
   let url: URL
@@ -53,11 +55,17 @@ export async function readConfig(home: string): Promise<Config | undefined> {
       typeof data['deviceName'] !== 'string'
     )
       throw new MeterError(invalidConfig)
+    const revision = data['backfillRevision']
     return {
       url: serviceUrl(data['url']),
       deviceToken: data['deviceToken'],
       deviceName: data['deviceName'],
       ...(data['backfill'] === 'done' ? { backfill: 'done' as const } : {}),
+      ...(typeof revision === 'number' &&
+      Number.isSafeInteger(revision) &&
+      revision > 0
+        ? { backfillRevision: revision }
+        : {}),
       ...(data['auto'] === 'on' || data['auto'] === 'off'
         ? { auto: data['auto'] }
         : {}),
@@ -85,11 +93,19 @@ export async function saveConfig(home: string, config: Config): Promise<void> {
 }
 export async function markBackfillDone(
   home: string,
-  deviceToken: string,
+  done: { readonly deviceToken: string; readonly revision: number },
 ): Promise<void> {
   const current = await readConfig(home)
-  if (current?.deviceToken === deviceToken && current.backfill !== 'done')
-    await saveConfig(home, { ...current, backfill: 'done' })
+  // Never lowers a marker: a re-login on an older runtime keeps the higher level.
+  if (
+    current?.deviceToken === done.deviceToken &&
+    backfillLevel(current) < done.revision
+  )
+    await saveConfig(home, {
+      ...current,
+      backfill: 'done',
+      backfillRevision: done.revision,
+    })
 }
 export async function logout(home: string): Promise<void> {
   await rm(join(home, '.config/madefeed/cli.json'), { force: true })

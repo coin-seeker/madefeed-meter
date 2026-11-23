@@ -65,7 +65,12 @@ it.each([[], ['--scheduled']])(
   async (...extra) => {
     // Given
     const { runtime, home, bodies } = await cliFixture()
-    await saveConfig(home, { ...config, backfill: 'done', auto: 'off' })
+    await saveConfig(home, {
+      ...config,
+      backfill: 'done',
+      backfillRevision: 2,
+      auto: 'off',
+    })
     // When
     await runCli(['upload', ...extra], {
       ...runtime,

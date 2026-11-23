@@ -157,6 +157,7 @@ export async function uploadUsage(
   token: string,
   body: UsagePayload & {
     readonly backfill?: true
+    readonly backfillRevision?: number
     readonly machineId?: string
   },
 ): Promise<UploadResult> {
@@ -175,7 +176,14 @@ export async function uploadUsage(
       body: {
         deviceName: safe.deviceName,
         rows: safe.rows.slice(offset, offset + 200),
-        ...(body.backfill ? { backfill: true } : {}),
+        ...(body.backfill
+          ? {
+              backfill: true,
+              ...(body.backfillRevision === undefined
+                ? {}
+                : { backfillRevision: body.backfillRevision }),
+            }
+          : {}),
         ...(body.machineId ? { machineId: body.machineId } : {}),
       },
     })

@@ -31,6 +31,8 @@ export const invalidUrl = '서버 URL이 올바르지 않아요.'
 export const unsafeUrl = '서버 URL은 인증 정보 없는 HTTPS origin이어야 해요.'
 export const invalidConfig = `설정 파일이 올바르지 않아요. ${RUN} login 으로 다시 연결해 주세요.`
 export const scheduledSkip = '연결된 기기가 없어 자동 전송을 건너뛰었어요.'
+export const backfillDeferred =
+  '지난 30일을 다시 합산하려면 Node.js를 22.15 이상으로 올린 뒤 다시 실행해 주세요. 이번에는 지정한 기간만 올려요.'
 export const dryRunHeader =
   '전송하지 않았어요. 아래 합계와 JSON만 전송 대상이에요.'
 export const dryRunColumns =
@@ -112,6 +114,7 @@ export function helpText(version: string): string {
   --dry-run    보내지 않고, 보낼 합계와 요청 JSON만 보여줘요.
   --days N     오늘을 포함해 며칠 치를 셀지 정해요. 기본 14, 최대 35 (KST).
                첫 연결·이전 버전의 첫 전송은 30일이에요. --dry-run은 예외예요.
+               더 많은 기록을 읽는 버전에서는 지난 30일을 한 번 다시 합산해요.
   --url URL    서버 주소예요. 기본은 MADEFEED_URL 또는 https://madefeed.dev.
   --json       기계가 읽을 JSON만 표준 출력으로 내보내요.
   --no-auto    이번 실행에서는 자동 전송을 등록하거나 갱신하지 않아요.
@@ -123,5 +126,5 @@ export function helpText(version: string): string {
 컴퓨터 식별값의 해시를 보내며, 한 컴퓨터는 한 번에 한 계정에만 연결할 수 있어요.
 계정을 바꾸려면 이전 계정에서 먼저 logout을 실행해 주세요.
 login --json은 loggedIn과 전송 결과를 담은 JSON 객체 하나를 출력해요.
-읽는 도구: Claude Code, Codex, OpenCode, Gemini CLI (Cursor는 아직 지원하지 않아요)`
+읽는 도구: Claude Code, Codex, OpenCode, Gemini CLI, Pi, oh-my-pi, OmO, Antigravity (Cursor는 아직 지원하지 않아요)`
 }

@@ -11,6 +11,38 @@ import { installSchedule } from '../src/schedule'
 import { schedulePaths } from '../src/schedule-builders'
 
 const homes: string[] = []
+it('lists all supported tools and explains versioned history in help', async () => {
+  // Given
+  const output: string[] = []
+  // When
+  await runCli(['--help'], { output: (text) => output.push(text) })
+  // Then
+  expect(output.join('')).toContain('Pi, oh-my-pi, OmO, Antigravity')
+  expect(output.join('')).toContain(
+    '더 많은 기록을 읽는 버전에서는 지난 30일을 한 번 다시 합산해요.',
+  )
+})
+it.each([2, 3, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, '2', null])(
+  'reads only positive safe integer backfill revisions: %s',
+  async (revision) => {
+    // Given
+    const { home } = await fixture()
+    await saveConfig(home, config)
+    await writeFile(
+      join(home, '.config/madefeed/cli.json'),
+      JSON.stringify({ ...config, backfillRevision: revision }),
+    )
+    // When
+    const saved = await readConfig(home)
+    // Then
+    expect(saved).toEqual({
+      ...config,
+      ...(revision === 2 || revision === 3
+        ? { backfillRevision: revision }
+        : {}),
+    })
+  },
+)
 afterEach(async () => {
   for (const home of homes.splice(0))
     await rm(home, { recursive: true, force: true })

@@ -5,16 +5,21 @@ import { runCli } from '../src/cli'
 import { logout, readConfig, saveConfig } from '../src/config'
 import { config } from './schedule-fixtures'
 import { cliFixture } from './cli-fixtures'
+import { zstdDecompressor } from '../src/zstd'
 
 it.each(['manual', 'scheduled'])(
   'leaves a completed config untouched after %s upload',
   async (mode) => {
     // Given: noncanonical whitespace detects even an otherwise identical rewrite.
     const { runtime, home } = await cliFixture()
-    await saveConfig(home, { ...config, backfill: 'done' })
+    await saveConfig(home, { ...config, backfill: 'done', backfillRevision: 2 })
     const file = join(home, '.config/madefeed/cli.json')
     const before =
-      JSON.stringify({ ...config, backfill: 'done' }, null, 2) + '\n'
+      JSON.stringify(
+        { ...config, backfill: 'done', backfillRevision: 2 },
+        null,
+        2,
+      ) + '\n'
     await writeFile(file, before)
     // When
     await runCli(
@@ -31,7 +36,7 @@ it.each(['manual', 'scheduled'])(
   async (mode) => {
     // Given
     const { runtime, home } = await cliFixture()
-    await saveConfig(home, config)
+    await saveConfig(home, { ...config, backfill: 'done' })
     const replacement = {
       ...config,
       deviceToken: 'mfd_new',
@@ -42,6 +47,7 @@ it.each(['manual', 'scheduled'])(
       ['upload', '--no-auto', ...(mode === 'scheduled' ? ['--scheduled'] : [])],
       {
         ...runtime,
+        zstd: zstdDecompressor() ?? null,
         fetch: async (input, init) => {
           await saveConfig(home, replacement)
           return runtime.fetch(input, init)
@@ -56,12 +62,13 @@ it.each(['manual', 'scheduled'])(
 it('marks backfill complete using the latest preferences for the same token', async () => {
   // Given
   const { runtime, home } = await cliFixture()
-  await saveConfig(home, { ...config, auto: 'on' })
+  await saveConfig(home, { ...config, auto: 'on', backfill: 'done' })
   // When
   await runCli(['upload', '--scheduled'], {
     ...runtime,
+    zstd: zstdDecompressor() ?? null,
     fetch: async (input, init) => {
-      await saveConfig(home, { ...config, auto: 'off' })
+      await saveConfig(home, { ...config, auto: 'off', backfill: 'done' })
       return runtime.fetch(input, init)
     },
   })
@@ -70,6 +77,7 @@ it('marks backfill complete using the latest preferences for the same token', as
     ...config,
     auto: 'off',
     backfill: 'done',
+    backfillRevision: 2,
   })
 })
 

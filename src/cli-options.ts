@@ -2,6 +2,7 @@ import { parseArgs } from 'node:util'
 import { MeterError } from './aggregate'
 import type { AutoRuntime } from './auto'
 import { helpText, invalidOptions } from './copy'
+import type { Decompressor } from './zstd'
 
 export type Runtime = AutoRuntime & {
   readonly env?: Readonly<Record<string, string | undefined>>
@@ -12,9 +13,10 @@ export type Runtime = AutoRuntime & {
   readonly diagnostic?: (text: string) => void
   readonly sleep?: (ms: number) => Promise<void>
   readonly machineId?: () => Promise<string>
+  readonly zstd?: Decompressor | null
 }
 
-export const VERSION = '0.5.0'
+export const VERSION = '0.6.0'
 export const help = helpText(VERSION)
 
 export function cliOptions(args: readonly string[]) {

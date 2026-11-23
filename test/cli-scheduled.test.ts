@@ -38,7 +38,12 @@ it('prints diagnostics and one timestamped result while uploading only the three
   // Given
   const { runtime, home, requests, bodies, output, diagnostic, calls } =
     await cliFixture()
-  await saveConfig(home, { ...config, auto: 'on', backfill: 'done' })
+  await saveConfig(home, {
+    ...config,
+    auto: 'on',
+    backfill: 'done',
+    backfillRevision: 2,
+  })
   const database = join(home, '.local/share/opencode')
   await mkdir(database, { recursive: true })
   await writeFile(join(database, 'opencode.db'), 'not a database')

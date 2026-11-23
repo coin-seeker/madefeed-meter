@@ -16,7 +16,10 @@ it('sends exactly one heartbeat request when rows are empty', async () => {
     },
   }
   // When
-  const result = await uploadUsage(api, 'mfd_test', payload('test-device', []))
+  const result = await uploadUsage(api, 'mfd_test', {
+    ...payload('test-device', []),
+    backfillRevision: 2,
+  })
   // Then
   expect(bodies).toEqual([{ deviceName: 'test-device', rows: [] }])
   expect(result).toEqual({
@@ -218,6 +221,7 @@ it.each([
     const result = await uploadUsage(api, 'mfd_test', {
       ...payload('device', rows),
       backfill: true,
+      backfillRevision: 2,
     })
     // Then
     expect(bodies).toEqual(
@@ -225,6 +229,7 @@ it.each([
         deviceName: 'device',
         rows: expect.any(Array),
         backfill: true,
+        backfillRevision: 2,
       })),
     )
     expect(

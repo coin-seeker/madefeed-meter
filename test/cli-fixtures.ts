@@ -34,6 +34,7 @@ export async function cliFixture() {
     self: base.self,
     exec: base.exec,
     env: {},
+    zstd: null,
     platform: 'darwin' as const,
     uid: 501,
     now: Date.parse('2026-11-16T09:00:00Z'),

@@ -5,6 +5,7 @@ import { runCli } from '../src/cli'
 import { readConfig, saveConfig } from '../src/config'
 import { config } from './schedule-fixtures'
 import { cliFixture } from './cli-fixtures'
+import { zstdDecompressor } from '../src/zstd'
 
 it.each(['login', 'upload'])(
   'uploads exactly thirty days after fresh %s saves its token',
@@ -27,6 +28,7 @@ it.each(['login', 'upload'])(
       [command, '--url', config.url, '--days', '1', '--no-auto', '--json'],
       {
         ...runtime,
+        zstd: null,
         fetch: async (input, init) => {
           if (String(input).endsWith('/usage')) {
             expect((await readConfig(home))?.deviceToken).toBe('mfd_test')
@@ -52,6 +54,7 @@ it.each(['login', 'upload'])(
         deviceName: expect.any(String),
         machineId: 'a'.repeat(64),
         backfill: true,
+        backfillRevision: 1,
         rows: expect.arrayContaining([
           {
             date: '2026-10-18',
@@ -70,6 +73,8 @@ it.each(['login', 'upload'])(
     ])
     expect(JSON.stringify(bodies)).not.toContain('2026-10-17')
     expect((await readConfig(home))?.backfill).toBe('done')
+    // No zstd here: the sum counts as revision 1 and repeats once zstd is readable.
+    expect((await readConfig(home))?.backfillRevision).toBe(1)
     expect(output).toHaveLength(1)
     expect(JSON.parse(output.join(''))).toEqual({
       ...(command === 'login' ? { loggedIn: true } : {}),
@@ -89,13 +94,20 @@ it.each([[], ['--scheduled']])(
     const { runtime, home, bodies } = await cliFixture()
     await saveConfig(home, { ...config, auto: 'off' })
     // When
-    await runCli(['upload', '--days', '1', ...extra], runtime)
-    await runCli(['upload', '--days', '1', ...extra], runtime)
+    await runCli(['upload', '--days', '1', ...extra], {
+      ...runtime,
+      zstd: null,
+    })
+    await runCli(['upload', '--days', '1', ...extra], {
+      ...runtime,
+      zstd: null,
+    })
     // Then: the older source is in the first request only, and auto preference survives.
     expect(bodies).toEqual([
       {
         deviceName: config.deviceName,
         backfill: true,
+        backfillRevision: 1,
         machineId: 'a'.repeat(64),
         rows: [
           { date: '2026-11-12', tool: 'gemini', model: 'old', tokens: 99 },
@@ -124,6 +136,7 @@ it.each([[], ['--scheduled']])(
       ...config,
       auto: 'off',
       backfill: 'done',
+      backfillRevision: 1,
     })
   },
 )
@@ -165,21 +178,24 @@ it.each(['applied', 'closed', null])(
 it('keeps the backfill pending when upload fails', async () => {
   // Given
   const { runtime, home } = await cliFixture()
-  await saveConfig(home, config)
+  const legacy = { ...config, backfill: 'done' as const }
+  await saveConfig(home, legacy)
   // When / Then
   await expect(
     runCli(['upload', '--no-auto'], {
       ...runtime,
+      zstd: zstdDecompressor() ?? null,
       fetch: async () => Response.json({}, { status: 503 }),
     }),
   ).rejects.toThrow('HTTP 503')
-  expect((await readConfig(home))?.backfill).toBeUndefined()
+  expect(await readConfig(home)).toEqual(legacy)
 })
 
 it('keeps dry-run offline and leaves a legacy backfill pending', async () => {
   // Given
   const { runtime, home, output } = await cliFixture()
-  await saveConfig(home, config)
+  const legacy = { ...config, backfill: 'done' as const }
+  await saveConfig(home, legacy)
   // When
   await runCli(['upload', '--dry-run', '--days', '1', '--json'], {
     ...runtime,
@@ -194,13 +210,13 @@ it('keeps dry-run offline and leaves a legacy backfill pending', async () => {
       { date: '2026-11-16', tool: 'gemini', model: 'gemini-test', tokens: 12 },
     ],
   })
-  expect(await readConfig(home)).toEqual(config)
+  expect(await readConfig(home)).toEqual(legacy)
 })
 
 it('preserves the completed marker through automatic upload preference changes', async () => {
   // Given
   const { runtime, home } = await cliFixture()
-  await saveConfig(home, { ...config, backfill: 'done' })
+  await saveConfig(home, { ...config, backfill: 'done', backfillRevision: 2 })
   // When
   await runCli(['auto', 'on'], runtime)
   await runCli(['auto', 'off'], runtime)
@@ -208,6 +224,7 @@ it('preserves the completed marker through automatic upload preference changes',
   expect(await readConfig(home)).toEqual({
     ...config,
     backfill: 'done',
+    backfillRevision: 2,
     auto: 'off',
   })
 })

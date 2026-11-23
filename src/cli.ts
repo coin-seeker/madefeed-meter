@@ -16,6 +16,8 @@ import type { Runtime } from './cli-options'
 import { cliOptions, help, VERSION } from './cli-options'
 import * as copy from './copy'
 import { cleanDisconnected, runLogout } from './disconnect'
+import { BACKFILL_REVISION, backfillLevel } from './backfill'
+import { zstdDecompressor } from './zstd'
 export type { Runtime } from './cli-options'
 
 export async function runCli(
@@ -127,9 +129,16 @@ export async function runCli(
     ? undefined
     : await optionalMachineId(runtime.machineId)
   let saved = configured
-  const backfill =
-    !values['dry-run'] &&
-    (command === 'login' || configured?.backfill !== 'done')
+  const zstd =
+    runtime.zstd === undefined ? (zstdDecompressor() ?? null) : runtime.zstd
+  const done = backfillLevel(configured)
+  const first = command === 'login' || done === 0
+  // Without zstd the compressed Codex history is missing, so the sum only
+  // counts as revision 1 and is repeated once this runtime can read it.
+  const revision = zstd === null ? 1 : BACKFILL_REVISION
+  const backfill = !values['dry-run'] && (first || done < revision)
+  if (!values['dry-run'] && !first && done < BACKFILL_REVISION && zstd === null)
+    diagnostic(copy.backfillDeferred)
   if (
     !values['dry-run'] &&
     !values['scheduled'] &&
@@ -152,6 +161,9 @@ export async function runCli(
       deviceToken: token,
       ...(config?.auto ? { auto: config.auto } : {}),
       ...(configured?.backfill ? { backfill: configured.backfill } : {}),
+      ...(configured?.backfillRevision
+        ? { backfillRevision: configured.backfillRevision }
+        : {}),
     }
     await saveConfig(home, saved)
     instructions(copy.connected(deviceName))
@@ -165,7 +177,12 @@ export async function runCli(
     saved.auto !== 'off'
   )
     await auto.install(saved)
-  const options = { home, sinceMs: windowStart(now, backfill ? 30 : days), env }
+  const options = {
+    home,
+    sinceMs: windowStart(now, backfill ? 30 : days),
+    env,
+    zstd,
+  }
   // Dry-run gathers without authentication or any network requests.
   const sources = await Promise.all(sourceReaders.map((read) => read(options)))
   for (const source of sources) if (source.reason) diagnostic(source.reason)
@@ -192,7 +209,9 @@ export async function runCli(
   try {
     result = await uploadUsage(api, token, {
       ...body,
-      ...(backfill ? { backfill: true as const } : {}),
+      ...(backfill
+        ? { backfill: true as const, backfillRevision: revision }
+        : {}),
       ...(machine ? { machineId: machine } : {}),
     })
   } catch (error) {
@@ -203,7 +222,7 @@ export async function runCli(
     })
     return
   }
-  if (saved?.backfill !== 'done') await markBackfillDone(home, token)
+  if (backfill) await markBackfillDone(home, { deviceToken: token, revision })
   output(
     values['scheduled']
       ? copy.scheduledUpload(now, result)

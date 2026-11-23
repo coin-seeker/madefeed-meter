@@ -1,3 +1,4 @@
+import { PassThrough } from 'node:stream'
 import { expect, it } from 'vitest'
 import { runCli } from '../src/cli'
 import { readConfig, saveConfig } from '../src/config'
@@ -13,6 +14,7 @@ it.each(['revoked', 'unreachable', 'different-origin'])(
       ...config,
       deviceToken: 'mfd_old',
       backfill: 'done',
+      backfillRevision: 2,
     })
     const calls: {
       readonly url: string
@@ -23,6 +25,7 @@ it.each(['revoked', 'unreachable', 'different-origin'])(
     // When
     await runCli(['login', '--url', url, '--no-auto'], {
       ...runtime,
+      zstd: () => new PassThrough(),
       fetch: async (input, init) => {
         calls.push({
           url: String(input),
@@ -30,6 +33,11 @@ it.each(['revoked', 'unreachable', 'different-origin'])(
         })
         if (String(input).endsWith('/revoke') && scenario === 'unreachable')
           throw new TypeError('offline')
+        if (String(input).endsWith('/usage') && scenario !== 'different-origin')
+          expect(await readConfig(home)).toMatchObject({
+            backfill: 'done',
+            backfillRevision: 2,
+          })
         return runtime.fetch(input, init)
       },
     })
@@ -51,6 +59,7 @@ it.each(['revoked', 'unreachable', 'different-origin'])(
       url,
       deviceToken: 'mfd_test',
       backfill: 'done',
+      backfillRevision: 2,
     })
     expect(diagnostic).toEqual(
       scenario === 'unreachable'
