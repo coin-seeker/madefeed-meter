@@ -8,13 +8,15 @@
 npx @the-seeker/madefeed@latest
 ```
 
-처음 실행하면 브라우저에서 기기를 연결하고, 이어서 사용량을 올려요. Node.js 22.13 이상이 필요해요.
+처음 실행하면 브라우저에서 기기를 연결하고, 이어서 사용량을 올려요. Node.js 22.15 이상이 필요해요.
 
 한 컴퓨터는 한 번에 한 계정에만 연결할 수 있어요. 계정을 바꾸려면 이전 계정에서 먼저 `npx @the-seeker/madefeed@latest logout`으로 연결을 끊은 뒤 새 계정에 연결해 주세요. 새 연결에는 0.5.0 이상이 필요해요.
 
 첫 연결에서는 `--days`와 관계없이 오늘 포함 지난 30일(KST)의 사용량을 올려요. 연결 전 기록 합산은 **계정당 한 번**이에요. 다시 연결해도 이미 합산한 과거 기록은 중복으로 더하지 않아요. 같은 서버에 다시 로그인하면 새 토큰을 받은 뒤 이전 기기 연결부터 해제해요. 이전 버전에서 연결한 기기도 다음 실제 전송(예약 전송 포함)에서 30일 합산을 한 번 시도해요. 서버가 합산을 마감했어도 이후에는 평소 기간으로 전송해요. `--dry-run`은 네트워크 요청 없이 지정한 `--days` 기간만 보여주며, 첫 합산 상태를 바꾸지 않아요.
 
 전송 결과에는 제외한 기록 수(있을 때), 지난 사용량 합산 여부, 남은 **누적 표**가 표시돼요. 누적 표는 쓰기 전까지 남아 있는 투표 잔액이에요. 예전 서버가 잔액을 보내지 않으면 표시하지 않아요.
+
+0.6.0부터 Codex가 7일이 지난 세션을 압축한 기록도 읽어요. 이전 버전에서는 약 일주일보다 오래된 Codex 사용량이 빠졌어요. 기존 기기는 다음 전송에서 지난 30일을 한 번 다시 합산하며 기존 값보다 줄이지 않아요. 자동 전송은 새 버전을 자동으로 받지 않으므로 `npx @the-seeker/madefeed@latest`를 한 번 실행해 복사본을 갱신하고 재합산해 주세요. Node.js가 22.15 미만이면 재합산을 미루므로 Node.js를 올린 뒤 다시 실행해요. 최초 합산 뒤 연결을 끊고 다시 연결했다면 이전 기록은 그대로 남아요.
 
 `login --json`은 연결과 전송을 마친 뒤 표준 출력에 JSON 객체 하나만 출력해요. 예: `{"loggedIn":true,"accepted":12,"ignored":0,"backfill":"applied","weekTokens":3000000,"votesGranted":3,"bankVotes":3}`. 연결 안내는 표준 오류로 나가요. `upload --json`은 `loggedIn` 없이 같은 전송 결과를 출력해요. 예전 서버에서는 `ignored`는 `0`, `backfill`은 `null`이고 `bankVotes`는 생략돼요.
 
@@ -48,7 +50,7 @@ npx @the-seeker/madefeed@latest
 
 `npx @the-seeker/madefeed@latest auto off`로 끄고, `npx @the-seeker/madefeed@latest auto on`으로 다시 켤 수 있어요. `--no-auto` 또는 `MADEFEED_NO_AUTO=1`은 이번 실행의 등록·갱신만 건너뛰며, 이미 등록한 작업을 끄지는 않아요. `--dry-run`도 등록하지 않아요. 예약 실행에는 `--scheduled`가 붙고, 연결 정보가 없으면 로그인 없이 건너뛰어요. 등록에 실패해도 `npx @the-seeker/madefeed@latest upload`로 직접 올릴 수 있어요.
 
-설치할 때 설정한 `OPENCODE_DATA_DIR`, `XDG_DATA_HOME`, `GEMINI_DATA_DIR`, `MADEFEED_URL`은 예약 작업에도 전달해요.
+설치할 때 설정한 `OPENCODE_DATA_DIR`, `XDG_DATA_HOME`, `GEMINI_DATA_DIR`, `MADEFEED_URL`, `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `PI_CODING_AGENT_DIR`, `PI_CODING_AGENT_SESSION_DIR`, `OMO_CODING_AGENT_DIR`, `OMO_CODING_AGENT_SESSION_DIR`은 예약 작업에도 전달해요.
 
 ## 연결 끊기와 정리
 
@@ -67,11 +69,13 @@ npx @the-seeker/madefeed@latest
 
 ## 읽는 곳
 
-Claude Code, Codex, OpenCode, Gemini CLI의 로컬 사용 기록을 읽기 전용으로 읽어요. Cursor는 아직 지원하지 않아요.
+Claude Code, Codex, OpenCode, Gemini CLI, Pi, oh-my-pi, OmO, Antigravity의 로컬 사용 기록을 읽기 전용으로 읽어요. Antigravity는 CLI 기록만 읽고 IDE의 암호화된 기록은 읽지 않아요. CLI 형식은 공개되지 않아 바뀌면 읽을 수 없는 값을 추측해 세지 않아요. Cursor는 아직 지원하지 않아요.
+
+CLI는 실행 중인 운영체제의 홈을 읽어요. 도구를 WSL에서 실행한다면 CLI도 WSL에서 실행해요. Windows에서 `CODEX_HOME`이나 `CLAUDE_CONFIG_DIR`에 `\\wsl.localhost\Ubuntu\home\me\.codex` 같은 UNC 경로를 쉼표로 구분해 추가할 수 있지만 WSL을 자동으로 찾지는 않아요.
 
 ## 개발
 
-이 저장소는 MadeFeed 모노레포의 `packages/cli`를 내보낸 저장소예요. 개발하려면 Node.js 22.13 이상과 pnpm이 필요해요.
+이 저장소는 MadeFeed 모노레포의 `packages/cli`를 내보낸 저장소예요. 개발하려면 Node.js 22.15 이상과 pnpm이 필요해요.
 
 ```sh
 pnpm install
