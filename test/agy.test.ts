@@ -1,8 +1,10 @@
+// SIZE_OK: existing source contract regressions share real SQLite fixtures.
 import { afterEach, expect, it } from 'vitest'
 import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { readAgy } from '../src/sources/agy'
+import { bfield, vfield, generation, modelStep, database } from './agy-fixtures'
 
 // SIZE_OK: the task requires the real DDL, wire encoder and source contract cases in this single owned test file.
 const sinceMs = Date.parse('2026-11-14T15:00:00Z')
@@ -19,93 +21,12 @@ async function fixture() {
   await mkdir(root, { recursive: true })
   return { home, root, sinceMs }
 }
-function varint(value: number | bigint): Buffer {
-  let remaining = BigInt(value)
-  const bytes: number[] = []
-  do {
-    const byte = Number(remaining & 127n)
-    remaining >>= 7n
-    bytes.push(byte | (remaining > 0n ? 128 : 0))
-  } while (remaining > 0n)
-  return Buffer.from(bytes)
-}
-const vfield = (field: number, value: number | bigint) =>
-  Buffer.concat([varint(field * 8), varint(value)])
-const bfield = (field: number, value: Uint8Array) =>
-  Buffer.concat([varint(field * 8 + 2), varint(value.length), value])
-function generation(
-  id = 1187,
-  name: string | Buffer = 'gemini-3.5-flash-extra-low',
-) {
-  const request = Buffer.concat([
-    vfield(1, id),
-    vfield(6, 65536),
-    Buffer.from([0x09, 1, 2, 3, 4, 5, 6, 7, 8]),
-    bfield(17, bfield(2, vfield(1, id))),
-    bfield(19, Buffer.from('gemini-default')),
-    bfield(28, typeof name === 'string' ? Buffer.from(name) : name),
-    Buffer.from([0x1d, 1, 2, 3, 4]),
-  ])
-  return Buffer.concat([bfield(2, Buffer.from([2])), bfield(3, request)])
-}
-type Call = {
-  readonly secs?: number
-  readonly model?: number
-  readonly input?: number
-  readonly output?: number
-  readonly id?: string
-}
-function modelStep(call: Call = {}) {
-  const usage = Buffer.concat([
-    vfield(1, call.model ?? 1187),
-    vfield(2, call.input ?? 1000),
-    vfield(3, call.output ?? 37),
-    vfield(6, 24),
-    bfield(8, bfield(1, Buffer.from('sessionID'))),
-    vfield(9, 30),
-    vfield(10, 7),
-    bfield(11, Buffer.from(call.id ?? '')),
-  ])
-  return Buffer.concat([
-    bfield(
-      1,
-      Buffer.concat([vfield(1, call.secs ?? seconds), vfield(2, 694663000)]),
-    ),
-    vfield(3, 2),
-    bfield(9, usage),
-    bfield(12, Buffer.from('5e4affe4')),
-    vfield(13, (1n << 64n) - 1n),
-  ])
-}
-function database(
-  root: string,
-  name: string,
-  contents: {
-    readonly generations?: readonly Buffer[]
-    readonly steps: readonly Buffer[]
-  },
-) {
-  const { DatabaseSync } = process.getBuiltinModule('node:sqlite')
-  const db = new DatabaseSync(join(root, name))
-  try {
-    db.exec(
-      'CREATE TABLE `steps` (`idx` integer,`step_type` integer NOT NULL DEFAULT 0,`status` integer NOT NULL DEFAULT 0,`has_subtrajectory` numeric NOT NULL DEFAULT false,`metadata` blob,`error_details` blob,`permissions` blob,`task_details` blob,`render_info` blob,`step_payload` blob,`step_format` integer NOT NULL DEFAULT 0,PRIMARY KEY (`idx`)); CREATE TABLE `gen_metadata` (`idx` integer,`data` blob,`size` integer NOT NULL DEFAULT 0,PRIMARY KEY (`idx`));',
-    )
-    contents.generations?.forEach((blob, idx) =>
-      db
-        .prepare('INSERT INTO gen_metadata (idx,data) VALUES (?,?)')
-        .run(idx, blob),
-    )
-    contents.steps.forEach((blob, idx) =>
-      db
-        .prepare('INSERT INTO steps (idx,metadata) VALUES (?,?)')
-        .run(idx, blob),
-    )
-  } finally {
-    db.close()
-  }
-}
-const row = (tokens: number, model = 'gemini-3.5-flash', input = 1000) => ({
+const row = (
+  tokens: number,
+  model = 'gemini-3.5-flash',
+  input = 1000,
+  reasoning = 30,
+) => ({
   date: '2026-11-15',
   tool: 'agy',
   model,
@@ -113,6 +34,9 @@ const row = (tokens: number, model = 'gemini-3.5-flash', input = 1000) => ({
   tokens,
   input,
   output: tokens - input,
+  cacheRead: 0,
+  cacheWrite: 0,
+  reasoning,
 })
 
 it('adds input and inclusive output on the KST date and skips unrelated wire fields', async () => {
@@ -127,7 +51,7 @@ it('adds input and inclusive output on the KST date and skips unrelated wire fie
   // Then
   expect(result).toEqual({ supported: true, rows: [row(1037)] })
 })
-it('deduplicates response ids in sorted db order rather than creation order', async () => {
+it("merges a repeated response id across dbs taking each field's maximum", async () => {
   // Given
   const options = await fixture()
   database(options.root, 'z.db', {
@@ -137,7 +61,7 @@ it('deduplicates response ids in sorted db order rather than creation order', as
   // When
   const result = await readAgy(options)
   // Then
-  expect(result.rows).toEqual([row(1037, 'agy')])
+  expect(result.rows).toEqual([row(9037, 'gemini-3.5-flash', 9000)])
 })
 it('counts equal step indices from different db stems without response ids', async () => {
   // Given
@@ -147,7 +71,7 @@ it('counts equal step indices from different db stems without response ids', asy
   // When
   const result = await readAgy(options)
   // Then
-  expect(result.rows).toEqual([row(2074, 'agy', 2000)])
+  expect(result.rows).toEqual([row(2074, 'gemini-3.5-flash', 2000, 60)])
 })
 it.each([true, false])(
   'falls back to primary model or agy when enum is unknown (%s)',
@@ -183,14 +107,14 @@ it.each([
   // When
   const result = await readAgy(options)
   // Then
-  expect(result).toEqual({ supported: true, rows: [row(1037, 'agy')] })
+  expect(result).toEqual({ supported: true, rows: [row(1037)] })
 })
 it('skips zero usage, absent usage and absent timestamps', async () => {
   // Given
   const options = await fixture()
   database(options.root, 'a.db', {
     steps: [
-      modelStep({ input: 0, output: 0 }),
+      modelStep({ input: 0, output: 0, reasoning: 0, visible: 0 }),
       bfield(1, vfield(1, seconds)),
       bfield(9, vfield(2, 10)),
     ],
@@ -214,7 +138,7 @@ it('drops old events and never opens garbage dbs with old db and wal mtimes', as
   // When
   const result = await readAgy(options)
   // Then
-  expect(result).toEqual({ supported: true, rows: [row(1037, 'agy')] })
+  expect(result).toEqual({ supported: true, rows: [row(1037)] })
 })
 it('keeps a db with an old mtime when its wal is recent', async () => {
   // Given
@@ -233,7 +157,7 @@ it('keeps a db with an old mtime when its wal is recent', async () => {
     // When
     const result = await readAgy(options)
     // Then
-    expect(result.rows).toEqual([row(1037, 'agy')])
+    expect(result.rows).toEqual([row(1037)])
   } finally {
     db.close()
   }
@@ -258,7 +182,7 @@ it('returns an empty supported result without a reason for missing directories',
   // Then
   expect(result).toEqual({ supported: true, rows: [] })
 })
-it.each(['garbage', 'steps', 'gen_metadata'])(
+it.each(['garbage'])(
   'discards all usage when a kept db cannot be read (%s)',
   async (failure) => {
     // Given
@@ -286,7 +210,22 @@ it.each(['garbage', 'steps', 'gen_metadata'])(
     })
   },
 )
-it('uses the first duplicate field and first name per enum', async () => {
+it.each(['steps', 'gen_metadata'])(
+  'reads a db that lacks %s',
+  async (table) => {
+    // Given
+    const options = await fixture()
+    database(options.root, 'a.db', { steps: [modelStep()] })
+    database(options.root, 'x.db', {
+      tables: table === 'steps' ? ['gen_metadata'] : ['steps'],
+    })
+    // When
+    const result = await readAgy(options)
+    // Then
+    expect(result).toEqual({ supported: true, rows: [row(1037)] })
+  },
+)
+it('uses the first sub-message, the last scalar and the last name per row, first row per id', async () => {
   // Given
   const options = await fixture()
   const request = bfield(
@@ -313,17 +252,17 @@ it('uses the first duplicate field and first name per enum', async () => {
   // When
   const result = await readAgy(options)
   // Then
-  expect(result.rows).toEqual([row(10, 'first', 7)])
+  expect(result.rows).toEqual([row(1002, 'wrong', 999, 0)])
 })
 it('treats invalid UTF-8 model names as absent', async () => {
   // Given
   const options = await fixture()
   database(options.root, 'a.db', {
     generations: [
-      generation(1187, Buffer.from([255])),
+      generation(1999, Buffer.from([255])),
       generation(99, 'valid-high'),
     ],
-    steps: [modelStep()],
+    steps: [modelStep({ model: 1999 })],
   })
   // When
   const result = await readAgy(options)

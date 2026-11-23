@@ -1,4 +1,4 @@
-import { readdir, stat } from 'node:fs/promises'
+import { readdir, realpath, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import {
@@ -11,12 +11,15 @@ import {
 import type { SourceOptions, SourceResult } from '../aggregate'
 import { databaseWorker } from './agy-db'
 import type { DatabaseInput, DatabaseResult } from './agy-db'
+import { antigravityProto } from './agy-proto'
+import { antigravityModels } from './agy-model'
+import { antigravityMerge } from './agy-merge'
 
 const failure = 'Antigravity 기록을 읽지 못해 이번에는 빼고 올려요.'
 
 async function databaseRows(input: DatabaseInput): Promise<DatabaseResult> {
   const worker = new Worker(
-    `const {parentPort,workerData}=require('node:worker_threads'); parentPort.postMessage((${databaseWorker.toString()})(workerData))`,
+    `const {parentPort,workerData}=require('node:worker_threads'); parentPort.postMessage((${databaseWorker.toString()})(workerData,(${antigravityProto.toString()})(),(${antigravityModels.toString()})(),(${antigravityMerge.toString()})()))`,
     { eval: true, workerData: input },
   )
   try {
@@ -50,17 +53,37 @@ async function walMtime(path: string): Promise<number> {
 
 export async function readAgy(options: SourceOptions): Promise<SourceResult> {
   try {
-    const root = join(options.home, '.gemini/antigravity-cli/conversations')
-    if (!(await directory(root))) return { supported: true, rows: [] }
+    const custom = options.env?.['ANTIGRAVITY_DATA_DIR']
+    const roots =
+      custom !== undefined
+        ? custom.split(',').filter(Boolean)
+        : [
+            '.gemini/antigravity',
+            '.gemini/antigravity-cli',
+            '.gemini/antigravity-ide',
+            '.gemini/antigravity-backup',
+            '.gemini/antigravity-acp',
+            '.config/antigravity',
+          ].map((root) => join(options.home, root, 'conversations'))
     const paths: string[] = []
-    for (const entry of await readdir(root, { withFileTypes: true })) {
-      if (!entry.isFile() || !entry.name.endsWith('.db')) continue
-      const path = join(root, entry.name)
-      if (
-        (await stat(path)).mtimeMs >= options.sinceMs ||
-        (await walMtime(path)) >= options.sinceMs
-      )
-        paths.push(path)
+    const seen = new Set<string>()
+    for (const candidate of roots) {
+      const nested = join(candidate, 'conversations')
+      const root =
+        custom !== undefined && (await directory(nested)) ? nested : candidate
+      if (!(await directory(root))) continue
+      for (const entry of await readdir(root, { withFileTypes: true })) {
+        if (!entry.isFile() || !entry.name.endsWith('.db')) continue
+        const path = join(root, entry.name)
+        const canonical = await realpath(path)
+        if (seen.has(canonical)) continue
+        seen.add(canonical)
+        if (
+          (await stat(path)).mtimeMs >= options.sinceMs ||
+          (await walMtime(path)) >= options.sinceMs
+        )
+          paths.push(path)
+      }
     }
     if (paths.length === 0) return { supported: true, rows: [] }
     const result = await databaseRows({
@@ -76,18 +99,33 @@ export async function readAgy(options: SourceOptions): Promise<SourceResult> {
       return { supported: false, rows: [], reason: failure }
     return {
       supported: true,
-      rows: result.totals.map(([date, model, tokens, input, output]) => ({
-        date,
-        tool: 'agy',
-        // Model ids have no slash here; a path-like string is not a model name.
-        model: model.includes('/') ? 'unknown' : modelName(model),
-        provider:
-          !model.includes('/') && modelName(model).startsWith('gemini-')
-            ? 'google'
-            : 'unknown',
-        tokens,
-        ...(input + output > 0 ? { input, output } : {}),
-      })),
+      rows: result.totals.map(
+        ([
+          date,
+          model,
+          tokens,
+          input,
+          output,
+          cacheRead,
+          cacheWrite,
+          reasoning,
+        ]) => ({
+          date,
+          tool: 'agy',
+          // Model ids have no slash here; a path-like string is not a model name.
+          model: model.includes('/') ? 'unknown' : modelName(model),
+          provider:
+            !model.includes('/') && modelName(model).startsWith('gemini-')
+              ? 'google'
+              : 'unknown',
+          tokens,
+          input,
+          output,
+          cacheRead,
+          cacheWrite,
+          reasoning,
+        }),
+      ),
     }
   } catch (error) {
     return unsupported(error, failure)
