@@ -35,11 +35,32 @@ export async function* rolloutLines(
       error.code !== 'ENOENT'
     )
       throw error
-    const counterpart = path.endsWith('.zst')
-      ? path.slice(0, -4)
-      : `${path}.zst`
-    yield* textLines(counterpart, zstd)
+    yield* textLines(counterpart(path), zstd)
   }
+}
+
+function counterpart(path: string): string {
+  return path.endsWith('.zst') ? path.slice(0, -4) : `${path}.zst`
+}
+
+/** The file to read for a listed rollout: Codex may compress it meanwhile. */
+export async function recentRollout(
+  path: string,
+  sinceMs: number,
+): Promise<string | undefined> {
+  for (const candidate of [path, counterpart(path)]) {
+    try {
+      return (await recentFile(candidate, sinceMs)) ? candidate : undefined
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !('code' in error) ||
+        error.code !== 'ENOENT'
+      )
+        throw error
+    }
+  }
+  return undefined
 }
 
 async function rollouts(options: SourceOptions): Promise<readonly string[]> {
@@ -67,8 +88,10 @@ async function rollouts(options: SourceOptions): Promise<readonly string[]> {
     }
   }
   const recent: string[] = []
-  for (const path of chosen.values())
-    if (await recentFile(path, options.sinceMs)) recent.push(path)
+  for (const path of chosen.values()) {
+    const present = await recentRollout(path, options.sinceMs)
+    if (present) recent.push(present)
+  }
   return recent
 }
 

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import zlib from 'node:zlib'
 import { aggregate, jsonLines } from '../src/aggregate'
-import { readCodex, rolloutLines } from '../src/sources/codex'
+import { readCodex, recentRollout, rolloutLines } from '../src/sources/codex'
 import { zstdDecompressor } from '../src/zstd'
 
 const sinceMs = Date.parse('2026-11-15T00:00:00Z')
@@ -274,4 +274,20 @@ it('keeps jsonLines plain-file BOM parsing compatible with other readers', async
   const values = await Array.fromAsync(jsonLines(path))
   // Then
   expect(values).toEqual([{ text: '한글' }])
+})
+
+it('follows a rollout that Codex compressed between listing and reading', async () => {
+  // Given: only the compressed twin is left where a plain rollout was listed.
+  const options = await fixture()
+  const listed = join(options.home, '.codex/sessions/rollout-a.jsonl')
+  await put(`${listed}.zst`, zlib.zstdCompressSync(content()))
+  // When
+  const present = await recentRollout(listed, options.sinceMs)
+  const gone = await recentRollout(
+    join(options.home, '.codex/sessions/rollout-b.jsonl'),
+    options.sinceMs,
+  )
+  // Then
+  expect(present).toBe(`${listed}.zst`)
+  expect(gone).toBeUndefined()
 })

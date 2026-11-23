@@ -10,7 +10,7 @@ import {
 } from './api'
 import { markBackfillDone, readConfig, saveConfig, serviceUrl } from './config'
 import { kstDateOf, windowStart } from './kst'
-import { sourceReaders } from './sources'
+import { readSources } from './sources'
 import { automatic, autoCommand } from './auto'
 import type { Runtime } from './cli-options'
 import { cliOptions, help, VERSION } from './cli-options'
@@ -133,10 +133,9 @@ export async function runCli(
     runtime.zstd === undefined ? (zstdDecompressor() ?? null) : runtime.zstd
   const done = backfillLevel(configured)
   const first = command === 'login' || done === 0
-  // Without zstd the compressed Codex history is missing, so the sum only
-  // counts as revision 1 and is repeated once this runtime can read it.
-  const revision = zstd === null ? 1 : BACKFILL_REVISION
-  const backfill = !values['dry-run'] && (first || done < revision)
+  // Read thirty days for a first sum, or to repeat one this runtime can improve.
+  const history =
+    !values['dry-run'] && (first || (done < BACKFILL_REVISION && zstd !== null))
   if (!values['dry-run'] && !first && done < BACKFILL_REVISION && zstd === null)
     diagnostic(copy.backfillDeferred)
   if (
@@ -179,12 +178,16 @@ export async function runCli(
     await auto.install(saved)
   const options = {
     home,
-    sinceMs: windowStart(now, backfill ? 30 : days),
+    sinceMs: windowStart(now, history ? 30 : days),
     env,
     zstd,
   }
   // Dry-run gathers without authentication or any network requests.
-  const sources = await Promise.all(sourceReaders.map((read) => read(options)))
+  const { results: sources, codex } = await readSources(options)
+  // Revision 2 claims the Codex history: a run that could not read it counts as
+  // revision 1 at most, so the one-time re-sum stays available for a later run.
+  const revision = codex ? BACKFILL_REVISION : 1
+  const backfill = history && (first || done < revision)
   for (const source of sources) if (source.reason) diagnostic(source.reason)
   const rows = aggregate(
     sources

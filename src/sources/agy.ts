@@ -1,7 +1,13 @@
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
-import { directory, MeterError, modelName, unsupported } from '../aggregate'
+import {
+  directory,
+  MAX_ROW_TOKENS,
+  MeterError,
+  modelName,
+  unsupported,
+} from '../aggregate'
 import type { SourceOptions, SourceResult } from '../aggregate'
 import { databaseWorker } from './agy-db'
 import type { DatabaseInput, DatabaseResult } from './agy-db'
@@ -61,14 +67,20 @@ export async function readAgy(options: SourceOptions): Promise<SourceResult> {
       paths: paths.toSorted(),
       sinceMs: options.sinceMs,
     })
-    if ('error' in result)
+    // The layout is reverse-engineered: a total no real day reaches means the
+    // fields moved, and such a row would make the whole upload fail.
+    if (
+      'error' in result ||
+      result.totals.some(([, , tokens]) => tokens > MAX_ROW_TOKENS)
+    )
       return { supported: false, rows: [], reason: failure }
     return {
       supported: true,
       rows: result.totals.map(([date, model, tokens]) => ({
         date,
         tool: 'agy',
-        model: modelName(model),
+        // Model ids have no slash here; a path-like string is not a model name.
+        model: model.includes('/') ? 'unknown' : modelName(model),
         tokens,
       })),
     }

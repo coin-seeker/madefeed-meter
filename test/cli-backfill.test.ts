@@ -54,7 +54,7 @@ it.each(['login', 'upload'])(
         deviceName: expect.any(String),
         machineId: 'a'.repeat(64),
         backfill: true,
-        backfillRevision: 1,
+        backfillRevision: 2,
         rows: expect.arrayContaining([
           {
             date: '2026-10-18',
@@ -73,8 +73,7 @@ it.each(['login', 'upload'])(
     ])
     expect(JSON.stringify(bodies)).not.toContain('2026-10-17')
     expect((await readConfig(home))?.backfill).toBe('done')
-    // No zstd here: the sum counts as revision 1 and repeats once zstd is readable.
-    expect((await readConfig(home))?.backfillRevision).toBe(1)
+    expect((await readConfig(home))?.backfillRevision).toBe(2)
     expect(output).toHaveLength(1)
     expect(JSON.parse(output.join(''))).toEqual({
       ...(command === 'login' ? { loggedIn: true } : {}),
@@ -107,7 +106,7 @@ it.each([[], ['--scheduled']])(
       {
         deviceName: config.deviceName,
         backfill: true,
-        backfillRevision: 1,
+        backfillRevision: 2,
         machineId: 'a'.repeat(64),
         rows: [
           { date: '2026-11-12', tool: 'gemini', model: 'old', tokens: 99 },
@@ -136,7 +135,7 @@ it.each([[], ['--scheduled']])(
       ...config,
       auto: 'off',
       backfill: 'done',
-      backfillRevision: 1,
+      backfillRevision: 2,
     })
   },
 )

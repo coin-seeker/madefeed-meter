@@ -327,3 +327,20 @@ it('treats invalid UTF-8 model names as absent', async () => {
   // Then
   expect(result.rows).toEqual([row(1037, 'valid')])
 })
+
+it('leaves the source out when a daily total is beyond any real day', async () => {
+  // Given: fields that moved, so an unrelated huge number sits where tokens were.
+  const options = await fixture()
+  database(options.root, 'a.db', {
+    generations: [generation()],
+    steps: [modelStep({ input: 200_000_000_000 })],
+  })
+  // When
+  const result = await readAgy(options)
+  // Then: no row that would make the whole upload fail.
+  expect(result).toEqual({
+    supported: false,
+    rows: [],
+    reason: 'Antigravity 기록을 읽지 못해 이번에는 빼고 올려요.',
+  })
+})

@@ -1,5 +1,6 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import zlib from 'node:zlib'
 import { expect, it } from 'vitest'
 import { runCli } from '../src/cli'
 import { readConfig, saveConfig } from '../src/config'
@@ -55,24 +56,69 @@ it.each(['available', 'unavailable', 'completed'] as const)(
   },
 )
 
-it('re-sums once on a runtime that reads zstd after a first sum without it', async () => {
-  // Given: a device whose first thirty-day sum ran where compressed logs were unreadable.
-  const { runtime, home, bodies } = await cliFixture()
+async function compressedRollout(home: string, data: Uint8Array) {
+  const directory = join(home, '.codex/sessions/2026/11/16')
+  await mkdir(directory, { recursive: true })
+  await writeFile(join(directory, 'rollout-a.jsonl.zst'), data)
+}
+const rollout = zlib.zstdCompressSync(
+  [
+    { type: 'turn_context', payload: { model: 'gpt-test' } },
+    {
+      type: 'event_msg',
+      timestamp: '2026-11-16T00:00:00Z',
+      payload: {
+        type: 'token_count',
+        info: { total_token_usage: { total_tokens: 70 } },
+      },
+    },
+  ]
+    .map((event) => JSON.stringify(event))
+    .join('\n'),
+)
+
+it('re-sums once where compressed Codex logs become readable after a first sum without them', async () => {
+  // Given: a compressed rollout, and a first thirty-day sum on a runtime that cannot read it.
+  const { runtime, home, bodies, diagnostic } = await cliFixture()
   const decompressor = zstdDecompressor()
   if (!decompressor) throw new TypeError('test requires Node.js 22.15+')
+  await compressedRollout(home, rollout)
   await saveConfig(home, config)
   await runCli(['upload', '--no-auto'], { ...runtime, zstd: null })
   // When: the same device uploads twice where compressed logs are readable.
   await runCli(['upload', '--no-auto'], { ...runtime, zstd: decompressor })
   await runCli(['upload', '--no-auto'], { ...runtime, zstd: decompressor })
-  // Then: revision 1, then revision 2 exactly once, then a plain upload.
+  // Then: revision 1 without Codex, revision 2 with it exactly once, then a plain upload.
   expect(bodies).toEqual([
     expect.objectContaining({ backfill: true, backfillRevision: 1 }),
     expect.objectContaining({ backfill: true, backfillRevision: 2 }),
     expect.not.objectContaining({ backfill: true }),
   ])
+  expect(JSON.stringify(bodies[0])).not.toContain('codex')
+  expect(JSON.stringify(bodies[1])).toContain('"tool":"codex"')
+  expect(diagnostic[0]).toContain('22.15')
   expect(await readConfig(home)).toMatchObject({
     backfill: 'done',
     backfillRevision: 2,
   })
+})
+
+it('keeps the one-time re-sum when the Codex history cannot be read during it', async () => {
+  // Given: an already summed device and a compressed rollout that is corrupt.
+  const { runtime, home, bodies } = await cliFixture()
+  const decompressor = zstdDecompressor()
+  if (!decompressor) throw new TypeError('test requires Node.js 22.15+')
+  await compressedRollout(home, rollout.subarray(0, rollout.length - 4))
+  await saveConfig(home, { ...config, backfill: 'done' })
+  // When
+  await runCli(['upload', '--no-auto'], { ...runtime, zstd: decompressor })
+  // Then: nothing is claimed, so a later run can still re-sum.
+  expect(bodies).toEqual([expect.not.objectContaining({ backfill: true })])
+  expect(await readConfig(home)).toEqual({ ...config, backfill: 'done' })
+  // When: the log is readable again.
+  await compressedRollout(home, rollout)
+  await runCli(['upload', '--no-auto'], { ...runtime, zstd: decompressor })
+  // Then
+  expect(bodies[1]).toMatchObject({ backfill: true, backfillRevision: 2 })
+  expect(await readConfig(home)).toMatchObject({ backfillRevision: 2 })
 })
