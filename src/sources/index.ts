@@ -6,6 +6,7 @@ import { readGemini } from './gemini'
 import { readPi } from './pi'
 import { readOmp } from './omp'
 import { readOmo } from './omo'
+import { readGjc } from './gjc'
 import { readAgy } from './agy'
 
 export const sourceReaders = [
@@ -16,6 +17,7 @@ export const sourceReaders = [
   readPi,
   readOmp,
   readOmo,
+  readGjc,
   readAgy,
 ] as const
 

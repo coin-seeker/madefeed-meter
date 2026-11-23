@@ -4,7 +4,7 @@ import { count, jsonLines, modelName, record, timestamp } from '../aggregate'
 import type { SourceOptions, SourceResult, UsageRow } from '../aggregate'
 import { kstDateOf } from '../kst'
 
-type SessionTool = 'pi' | 'omp' | 'omo'
+type SessionTool = 'pi' | 'omp' | 'omo' | 'gjc'
 type Entry = {
   readonly ms: number
   readonly row: UsageRow
