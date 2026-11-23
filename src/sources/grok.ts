@@ -147,8 +147,8 @@ export async function readGrok(options: SourceOptions): Promise<SourceResult> {
     const rows = [...entries.values()]
       .filter((entry) => entry.ms >= options.sinceMs)
       .map((entry) => entry.row)
-    // The format is not confirmed on a real install: a day total no real use
-    // reaches means the fields moved, and such a row would fail the whole upload.
+    // The format is undocumented: a day total no real use reaches means the
+    // fields moved, and such a row would fail the whole upload.
     const totals = new Map<string, number>()
     for (const row of rows) {
       const key = JSON.stringify([row.date, row.model])
