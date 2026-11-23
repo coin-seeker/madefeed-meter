@@ -8,6 +8,7 @@ import { readOmp } from './omp'
 import { readOmo } from './omo'
 import { readAgy } from './agy'
 import { readHermes } from './hermes'
+import { readGrok } from './grok'
 
 export const sourceReaders = [
   readClaude,
@@ -19,6 +20,7 @@ export const sourceReaders = [
   readOmo,
   readAgy,
   readHermes,
+  readGrok,
 ] as const
 
 export async function readSources(options: SourceOptions) {

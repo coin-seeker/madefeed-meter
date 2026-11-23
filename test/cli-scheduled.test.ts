@@ -2,6 +2,7 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { runCli } from '../src/cli'
+import { VERSION } from '../src/cli-options'
 import { BACKFILL_REVISION } from '../src/backfill'
 import { saveConfig } from '../src/config'
 import { agentPath } from '../src/agent'
@@ -55,6 +56,7 @@ it('prints diagnostics and one timestamped result while uploading only the three
   expect(bodies).toEqual([
     {
       deviceName: config.deviceName,
+      cliVersion: VERSION,
       machineId: 'a'.repeat(64),
       rows: [
         {

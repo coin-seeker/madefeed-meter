@@ -18,6 +18,8 @@ npx @the-seeker/madefeed@latest
 
 0.6.0부터 Codex가 7일이 지난 세션을 압축한 기록도 읽어요. 이전 버전에서는 약 일주일보다 오래된 Codex 사용량이 빠졌어요. 기존 기기는 다음 전송에서 지난 30일을 한 번 다시 합산하며 기존 값보다 줄이지 않아요. 자동 전송은 새 버전을 자동으로 받지 않으므로 `npx @the-seeker/madefeed@latest`를 한 번 실행해 복사본을 갱신하고 재합산해 주세요. Node.js가 22.15 미만이면 재합산을 미루므로 Node.js를 올린 뒤 다시 실행해요. 최초 합산 뒤 연결을 끊고 다시 연결했다면 이전 기록은 그대로 남아요.
 
+0.9.0부터 Grok Build 사용량을 읽고 전송마다 CLI 버전을 보내요. 자동 전송은 새 버전을 받지 않으므로 `npx @the-seeker/madefeed@latest`를 한 번 실행해 주세요. 그 실행이 최근 14일의 Grok Build 사용량을 함께 올리고 자동 전송 복사본도 새 버전으로 바꿔요. 웹의 토큰 미터 기기 목록과 설정 > API 키·MCP가 예전 버전을 쓰는 기기를 알려 줘요.
+
 `login --json`은 연결과 전송을 마친 뒤 표준 출력에 JSON 객체 하나만 출력해요. 예: `{"loggedIn":true,"accepted":12,"ignored":0,"backfill":"applied","weekTokens":3000000,"votesGranted":3,"bankVotes":3}`. 연결 안내는 표준 오류로 나가요. `upload --json`은 `loggedIn` 없이 같은 전송 결과를 출력해요. 예전 서버에서는 `ignored`는 `0`, `backfill`은 `null`이고 `bankVotes`는 생략돼요.
 
 | 명령 | 하는 일 |
@@ -50,7 +52,7 @@ npx @the-seeker/madefeed@latest
 
 `npx @the-seeker/madefeed@latest auto off`로 끄고, `npx @the-seeker/madefeed@latest auto on`으로 다시 켤 수 있어요. `--no-auto` 또는 `MADEFEED_NO_AUTO=1`은 이번 실행의 등록·갱신만 건너뛰며, 이미 등록한 작업을 끄지는 않아요. `--dry-run`도 등록하지 않아요. 예약 실행에는 `--scheduled`가 붙고, 연결 정보가 없으면 로그인 없이 건너뛰어요. 등록에 실패해도 `npx @the-seeker/madefeed@latest upload`로 직접 올릴 수 있어요.
 
-설치할 때 설정한 `OPENCODE_DATA_DIR`, `XDG_DATA_HOME`, `GEMINI_DATA_DIR`, `MADEFEED_URL`, `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `PI_CODING_AGENT_DIR`, `PI_CODING_AGENT_SESSION_DIR`, `OMO_CODING_AGENT_DIR`, `OMO_CODING_AGENT_SESSION_DIR`, `ANTIGRAVITY_DATA_DIR`, `HERMES_HOME`은 예약 작업에도 전달해요.
+설치할 때 설정한 `OPENCODE_DATA_DIR`, `XDG_DATA_HOME`, `GEMINI_DATA_DIR`, `MADEFEED_URL`, `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `PI_CODING_AGENT_DIR`, `PI_CODING_AGENT_SESSION_DIR`, `OMO_CODING_AGENT_DIR`, `OMO_CODING_AGENT_SESSION_DIR`, `ANTIGRAVITY_DATA_DIR`, `HERMES_HOME`, `GROK_HOME`은 예약 작업에도 전달해요.
 
 ## 연결 끊기와 정리
 
@@ -60,7 +62,7 @@ npx @the-seeker/madefeed@latest
 
 ## 보내는 것과 보내지 않는 것
 
-- 보내는 것: 기기 이름, 컴퓨터 식별값의 SHA-256 해시, 날짜, 도구 이름, 모델 이름, 모델 제공사(예: anthropic, openai) 이름, 토큰 수와 입력·출력·캐시 읽기·캐시 쓰기·추론 구성. 제공사는 기록된 값을 쓰거나 도구와 모델 이름으로 추정하며, 알 수 없으면 `unknown`이에요. 구성은 기록에서 알 수 있는 값만 보내요.
+- 보내는 것: 기기 이름, CLI 버전, 컴퓨터 식별값의 SHA-256 해시, 날짜, 도구 이름, 모델 이름, 모델 제공사(예: anthropic, openai) 이름, 토큰 수와 입력·출력·캐시 읽기·캐시 쓰기·추론 구성. 제공사는 기록된 값을 쓰거나 도구와 모델 이름으로 추정하며, 알 수 없으면 `unknown`이에요. 구성은 기록에서 알 수 있는 값만 보내요.
 - 보내지 않는 것: 프롬프트, 대화 내용, 코드, 파일 이름과 경로
 
 컴퓨터 식별값은 macOS의 IOPlatformUUID, Linux의 machine-id, Windows의 MachineGuid를 읽고 `madefeed-meter:v1:` 접두어를 붙여 해시해요. 원본 식별값은 출력·전송·저장하지 않아요. 식별값을 읽지 못하면 새 연결은 중단하지만, 이미 연결된 기기는 해시 없이 사용량을 올릴 수 있어요.
@@ -69,7 +71,7 @@ npx @the-seeker/madefeed@latest
 
 ## 읽는 곳
 
-Claude Code, Codex, OpenCode, Gemini CLI, Pi, oh-my-pi, OmO, Antigravity, Hermes의 로컬 사용 기록을 읽기 전용으로 읽어요. Antigravity는 CLI와 IDE의 대화 기록 데이터베이스(`.db`)를 읽고, 암호화된 `.pb` 파일은 읽지 않아요. Antigravity 안에서 쓴 Gemini 모델 사용량은 Antigravity로 세요. CLI 형식은 공개되지 않아 바뀌면 읽을 수 없는 값을 추측해 세지 않아요. Hermes는 `~/.hermes/state.db`와 프로필의 `state.db`에서 모델별 토큰 기록을 읽어요. 여러 날에 걸친 세션은 같은 폴더의 `logs/agent.log` 호출 기록으로 날짜를 나눠요. 호출 기록이 없으면 처음 쓴 날짜로 세고, 기록이 일부만 남아 날짜를 알 수 없는 사용량은 세지 않아요. Cursor는 아직 지원하지 않아요.
+Claude Code, Codex, OpenCode, Gemini CLI, Pi, oh-my-pi, OmO, Antigravity, Hermes, Grok Build의 로컬 사용 기록을 읽기 전용으로 읽어요. Antigravity는 CLI와 IDE의 대화 기록 데이터베이스(`.db`)를 읽고, 암호화된 `.pb` 파일은 읽지 않아요. Antigravity 안에서 쓴 Gemini 모델 사용량은 Antigravity로 세요. CLI 형식은 공개되지 않아 바뀌면 읽을 수 없는 값을 추측해 세지 않아요. Hermes는 `~/.hermes/state.db`와 프로필의 `state.db`에서 모델별 토큰 기록을 읽어요. 여러 날에 걸친 세션은 같은 폴더의 `logs/agent.log` 호출 기록으로 날짜를 나눠요. 호출 기록이 없으면 처음 쓴 날짜로 세고, 기록이 일부만 남아 날짜를 알 수 없는 사용량은 세지 않아요. Grok Build는 `~/.grok/sessions` 아래 `updates.jsonl`을 읽으며, `GROK_HOME`으로 루트를 바꿀 수 있어요. Cursor는 아직 지원하지 않아요.
 
 CLI는 실행 중인 운영체제의 홈을 읽어요. 도구를 WSL에서 실행한다면 CLI도 WSL에서 실행해요. Windows에서 `CODEX_HOME`이나 `CLAUDE_CONFIG_DIR`에 `\\wsl.localhost\Ubuntu\home\me\.codex` 같은 UNC 경로를 쉼표로 구분해 추가할 수 있지만 WSL을 자동으로 찾지는 않아요.
 

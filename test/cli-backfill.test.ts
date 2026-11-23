@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { runCli } from '../src/cli'
+import { VERSION } from '../src/cli-options'
 import { BACKFILL_REVISION } from '../src/backfill'
 import { readConfig, saveConfig } from '../src/config'
 import { config } from './schedule-fixtures'
@@ -53,6 +54,7 @@ it.each(['login', 'upload'])(
     expect(bodies).toEqual([
       {
         deviceName: expect.any(String),
+        cliVersion: VERSION,
         machineId: 'a'.repeat(64),
         backfill: true,
         backfillRevision: BACKFILL_REVISION,
@@ -108,6 +110,7 @@ it.each([[], ['--scheduled']])(
     expect(bodies).toEqual([
       {
         deviceName: config.deviceName,
+        cliVersion: VERSION,
         backfill: true,
         backfillRevision: BACKFILL_REVISION,
         machineId: 'a'.repeat(64),
@@ -130,6 +133,7 @@ it.each([[], ['--scheduled']])(
       },
       {
         deviceName: config.deviceName,
+        cliVersion: VERSION,
         machineId: 'a'.repeat(64),
         rows: [
           {
@@ -216,6 +220,7 @@ it('keeps dry-run offline and leaves a legacy backfill pending', async () => {
   // Then
   expect(JSON.parse(output.join(''))).toEqual({
     deviceName: config.deviceName,
+    cliVersion: VERSION,
     rows: [
       {
         date: '2026-11-16',

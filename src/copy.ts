@@ -126,5 +126,5 @@ export function helpText(version: string): string {
 컴퓨터 식별값의 해시를 보내며, 한 컴퓨터는 한 번에 한 계정에만 연결할 수 있어요.
 계정을 바꾸려면 이전 계정에서 먼저 logout을 실행해 주세요.
 login --json은 loggedIn과 전송 결과를 담은 JSON 객체 하나를 출력해요.
-읽는 도구: Claude Code, Codex, OpenCode, Gemini CLI, Pi, oh-my-pi, OmO, Antigravity, Hermes (Cursor는 아직 지원하지 않아요)`
+읽는 도구: Claude Code, Codex, OpenCode, Gemini CLI, Pi, oh-my-pi, OmO, Antigravity, Hermes, Grok Build (Cursor는 아직 지원하지 않아요)`
 }

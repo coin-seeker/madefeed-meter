@@ -2,6 +2,7 @@ import { setTimeout } from 'node:timers/promises'
 import { MeterError, record, payload } from './aggregate'
 import type { UsagePayload } from './aggregate'
 import { COMPLETE_TOOLS, uploadChunks } from './chunks'
+import { VERSION } from './cli-options'
 import { ApiError, post } from './api-http'
 import type { Api } from './api-http'
 export { ApiError } from './api-http'
@@ -178,6 +179,7 @@ export async function uploadUsage(
       token,
       body: {
         deviceName: safe.deviceName,
+        cliVersion: VERSION,
         rows,
         ...(completeTools.length ? { completeTools } : {}),
         ...(body.backfill

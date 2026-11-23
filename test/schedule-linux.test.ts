@@ -183,6 +183,7 @@ it('passes the source directory overrides to the job after the original four key
     PI_CODING_AGENT_DIR: '/pi',
     PI_CODING_AGENT_SESSION_DIR: '/pi sessions',
     OMO_CODING_AGENT_DIR: '/omo',
+    GROK_HOME: '/grok',
     UNRELATED: 'excluded',
   }
   // When
@@ -196,5 +197,6 @@ it('passes the source directory overrides to the job after the original four key
     'PI_CODING_AGENT_SESSION_DIR',
     'OMO_CODING_AGENT_DIR',
     'OMO_CODING_AGENT_SESSION_DIR',
+    'GROK_HOME',
   ])
 })

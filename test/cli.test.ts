@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runCli } from '../src/cli'
+import { VERSION } from '../src/cli-options'
 import { readConfig, saveConfig } from '../src/config'
 import { MeterError } from '../src/aggregate'
 import { RUN } from '../src/copy'
@@ -17,12 +18,14 @@ it('lists all supported tools and explains versioned history in help', async () 
   // When
   await runCli(['--help'], { output: (text) => output.push(text) })
   // Then
-  expect(output.join('')).toContain('Pi, oh-my-pi, OmO, Antigravity, Hermes')
+  expect(output.join('')).toContain(
+    'Pi, oh-my-pi, OmO, Antigravity, Hermes, Grok Build',
+  )
   expect(output.join('')).toContain(
     '더 많은 기록을 읽는 버전에서는 지난 30일을 한 번 다시 합산해요.',
   )
 })
-it.each([2, 3, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, '2', null])(
+it.each([2, 3, 4, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, '2', null])(
   'reads only positive safe integer backfill revisions: %s',
   async (revision) => {
     // Given
@@ -37,7 +40,7 @@ it.each([2, 3, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, '2', null])(
     // Then
     expect(saved).toEqual({
       ...config,
-      ...(revision === 2 || revision === 3
+      ...(revision === 2 || revision === 3 || revision === 4
         ? { backfillRevision: revision }
         : {}),
     })
@@ -68,8 +71,68 @@ it('dry-run never calls injected fetch and prints the exact upload body without 
   expect(calls).toBe(0)
   expect(JSON.parse(output.join(''))).toEqual({
     deviceName: expect.any(String),
+    cliVersion: VERSION,
     rows: [],
   })
+})
+it('uses a bounded three-part CLI version', () => {
+  // Given / When / Then
+  expect(VERSION).toMatch(/^\d{1,4}\.\d{1,4}\.\d{1,4}$/)
+})
+it('includes Grok Build in the real dry-run body', async () => {
+  // Given
+  const home = await mkdtemp(join(tmpdir(), 'madefeed-cli-grok-'))
+  homes.push(home)
+  const directory = join(home, '.grok/sessions/nested/main')
+  await mkdir(directory, { recursive: true })
+  await writeFile(
+    join(directory, 'updates.jsonl'),
+    JSON.stringify({
+      params: {
+        _meta: { agentTimestampMs: Date.parse('2026-11-16T00:00:00Z') },
+        update: {
+          sessionUpdate: 'turn_completed',
+          usage: {
+            modelUsage: {
+              'grok-test': {
+                inputTokens: 10,
+                outputTokens: 5,
+                cachedReadTokens: 2,
+                cacheCreationTokens: 1,
+                reasoningTokens: 3,
+              },
+            },
+          },
+        },
+      },
+    }),
+  )
+  const output: string[] = []
+  // When
+  await runCli(['upload', '--dry-run', '--days', '1', '--json'], {
+    home,
+    env: {},
+    now: Date.parse('2026-11-16'),
+    output: (text) => output.push(text),
+    fetch: async () => {
+      throw new TypeError('network forbidden')
+    },
+  })
+  // Then
+  expect(JSON.parse(output.join('')).rows).toEqual([
+    {
+      date: '2026-11-16',
+      tool: 'grok',
+      model: 'grok-test',
+      provider: 'xai',
+      tokens: 15,
+      input: 7,
+      output: 5,
+      cacheRead: 2,
+      cacheWrite: 1,
+      reasoning: 3,
+    },
+  ])
 })
 it('stores config at 0600 and status never prints a token', async () => {
   // Given

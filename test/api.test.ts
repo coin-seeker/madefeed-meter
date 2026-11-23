@@ -4,6 +4,7 @@ import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { requestDevice, pollToken, uploadUsage } from '../src/api'
 import { payload } from '../src/aggregate'
+import { VERSION } from '../src/cli-options'
 
 const cleanup: (() => Promise<void>)[] = []
 it('declares agy complete only in chunks that carry agy rows', async () => {
@@ -36,8 +37,13 @@ it('declares agy complete only in chunks that carry agy rows', async () => {
   await uploadUsage(api, 'mfd_test', payload('device', rows))
   // Then
   expect(bodies).toEqual([
-    { deviceName: 'device', rows: rows.slice(0, 100) },
-    { deviceName: 'device', rows: rows.slice(100), completeTools: ['agy'] },
+    { deviceName: 'device', cliVersion: VERSION, rows: rows.slice(0, 100) },
+    {
+      deviceName: 'device',
+      cliVersion: VERSION,
+      rows: rows.slice(100),
+      completeTools: ['agy'],
+    },
   ])
 })
 it('sends exactly one heartbeat request when rows are empty', async () => {
@@ -56,7 +62,9 @@ it('sends exactly one heartbeat request when rows are empty', async () => {
     backfillRevision: 2,
   })
   // Then
-  expect(bodies).toEqual([{ deviceName: 'test-device', rows: [] }])
+  expect(bodies).toEqual([
+    { deviceName: 'test-device', cliVersion: VERSION, rows: [] },
+  ])
   expect(result).toEqual({
     accepted: 0,
     ignored: 0,
@@ -230,9 +238,10 @@ it.each([
   { statuses: ['applied', 'closed', null], expected: 'applied' },
   { statuses: [null, 'closed', null], expected: 'closed' },
   { statuses: [null, null, null], expected: null },
+  { statuses: [null, null, null], expected: null, plain: true },
 ])(
-  'aggregates all backfill chunks with $statuses',
-  async ({ statuses, expected }) => {
+  'includes CLI version in all 201-row chunks with $statuses (plain=$plain)',
+  async ({ statuses, expected, plain }) => {
     // Given
     const bodies: unknown[] = []
     const api = {
@@ -263,16 +272,15 @@ it.each([
     // When
     const result = await uploadUsage(api, 'mfd_test', {
       ...payload('device', rows),
-      backfill: true,
-      backfillRevision: 2,
+      ...(plain ? {} : { backfill: true as const, backfillRevision: 2 }),
     })
     // Then
     expect(bodies).toEqual(
       [0, 100, 200].map(() => ({
         deviceName: 'device',
+        cliVersion: VERSION,
         rows: expect.any(Array),
-        backfill: true,
-        backfillRevision: 2,
+        ...(plain ? {} : { backfill: true, backfillRevision: 2 }),
       })),
     )
     expect(

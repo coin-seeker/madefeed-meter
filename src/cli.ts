@@ -208,7 +208,13 @@ export async function runCli(
           `${row.date}  ${row.tool.padEnd(11)}  ${row.provider.padEnd(14)}  ${row.model.padEnd(28)}  ${row.tokens}`,
         )
     }
-    output(JSON.stringify(body, null, values['json'] ? undefined : 2))
+    output(
+      JSON.stringify(
+        { deviceName: body.deviceName, cliVersion: VERSION, rows: body.rows },
+        null,
+        values['json'] ? undefined : 2,
+      ),
+    )
     return
   }
   if (!token) return

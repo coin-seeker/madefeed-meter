@@ -30,6 +30,7 @@ export const environmentKeys = [
   'OMO_CODING_AGENT_SESSION_DIR',
   'ANTIGRAVITY_DATA_DIR',
   'HERMES_HOME',
+  'GROK_HOME',
 ] as const
 export function jobEnvironment(
   context: ScheduleContext,
