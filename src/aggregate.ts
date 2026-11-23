@@ -20,7 +20,13 @@ export type UsageRow = {
   readonly date: string
   readonly tool: Tool
   readonly model: string
+  readonly provider: string
   readonly tokens: number
+  readonly input?: number
+  readonly output?: number
+  readonly cacheRead?: number
+  readonly cacheWrite?: number
+  readonly reasoning?: number
 }
 export type SourceOptions = {
   readonly home: string
@@ -73,26 +79,72 @@ export function modelName(value: unknown): string {
     ? value
     : 'unknown'
 }
+export function providerName(value: unknown): string {
+  return typeof value === 'string' && /^[A-Za-z0-9._-]{1,40}$/.test(value)
+    ? value.toLowerCase()
+    : 'unknown'
+}
+
+const partNames = [
+  'input',
+  'output',
+  'cacheRead',
+  'cacheWrite',
+  'reasoning',
+] as const
 
 export function aggregate(rows: readonly UsageRow[]): UsageRow[] {
-  // Mutable accumulator; only the projected four-field contract leaves this module.
+  // Mutable accumulator; only explicitly projected usage fields leave this module.
   const totals = new Map<string, UsageRow>()
   for (const row of rows) {
     const model = modelName(row.model)
-    const key = JSON.stringify([row.date, row.tool, model])
-    const tokens = (totals.get(key)?.tokens ?? 0) + row.tokens
+    const provider = providerName(row.provider)
+    const key = JSON.stringify([row.date, row.tool, model, provider])
+    const previous = totals.get(key)
+    const tokens = (previous?.tokens ?? 0) + row.tokens
     if (!Number.isSafeInteger(tokens) || tokens < 0 || tokens > MAX_ROW_TOKENS)
       throw new MeterError(
         '토큰 합계가 서버 허용 범위(0~100,000,000,000)를 벗어나요.',
       )
-    totals.set(key, { date: row.date, tool: row.tool, model, tokens })
+    const parts: Partial<Record<(typeof partNames)[number], number>> = {}
+    for (const name of partNames) {
+      const before = previous?.[name]
+      const value = row[name]
+      if (before !== undefined || value !== undefined)
+        parts[name] = (before ?? 0) + (value ?? 0)
+    }
+    totals.set(key, {
+      date: row.date,
+      tool: row.tool,
+      model,
+      provider,
+      tokens,
+      ...parts,
+    })
   }
-  return [...totals.values()].sort(
-    (a, b) =>
-      a.date.localeCompare(b.date) ||
-      a.tool.localeCompare(b.tool) ||
-      a.model.localeCompare(b.model),
-  )
+  return [...totals.values()]
+    .map((row) => {
+      const { date, tool, model, provider, tokens } = row
+      const parts: Partial<Record<(typeof partNames)[number], number>> = {}
+      for (const name of partNames) {
+        const value = row[name]
+        if (
+          value !== undefined &&
+          Number.isSafeInteger(value) &&
+          value >= 0 &&
+          value <= MAX_ROW_TOKENS
+        )
+          parts[name] = value
+      }
+      return { date, tool, model, provider, tokens, ...parts }
+    })
+    .sort(
+      (a, b) =>
+        a.date.localeCompare(b.date) ||
+        a.tool.localeCompare(b.tool) ||
+        a.model.localeCompare(b.model) ||
+        a.provider.localeCompare(b.provider),
+    )
 }
 export function payload(
   deviceName: string,

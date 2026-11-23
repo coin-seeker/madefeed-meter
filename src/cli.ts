@@ -184,7 +184,7 @@ export async function runCli(
   }
   // Dry-run gathers without authentication or any network requests.
   const { results: sources, codex } = await readSources(options)
-  // Revision 2 claims the Codex history: a run that could not read it counts as
+  // Revision 3 claims the Codex history: a run that could not read it counts as
   // revision 1 at most, so the one-time re-sum stays available for a later run.
   const revision = codex ? BACKFILL_REVISION : 1
   const backfill = history && (first || done < revision)
@@ -201,7 +201,7 @@ export async function runCli(
       output(copy.dryRunColumns)
       for (const row of rows)
         output(
-          `${row.date}  ${row.tool.padEnd(11)}  ${row.model.padEnd(28)}  ${row.tokens}`,
+          `${row.date}  ${row.tool.padEnd(11)}  ${row.provider.padEnd(14)}  ${row.model.padEnd(28)}  ${row.tokens}`,
         )
     }
     output(JSON.stringify(body, null, values['json'] ? undefined : 2))

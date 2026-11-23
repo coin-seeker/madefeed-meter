@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { runCli } from '../src/cli'
+import { BACKFILL_REVISION } from '../src/backfill'
 import { logout, readConfig, saveConfig } from '../src/config'
 import { config } from './schedule-fixtures'
 import { cliFixture } from './cli-fixtures'
@@ -12,11 +13,15 @@ it.each(['manual', 'scheduled'])(
   async (mode) => {
     // Given: noncanonical whitespace detects even an otherwise identical rewrite.
     const { runtime, home } = await cliFixture()
-    await saveConfig(home, { ...config, backfill: 'done', backfillRevision: 2 })
+    await saveConfig(home, {
+      ...config,
+      backfill: 'done',
+      backfillRevision: BACKFILL_REVISION,
+    })
     const file = join(home, '.config/madefeed/cli.json')
     const before =
       JSON.stringify(
-        { ...config, backfill: 'done', backfillRevision: 2 },
+        { ...config, backfill: 'done', backfillRevision: BACKFILL_REVISION },
         null,
         2,
       ) + '\n'
@@ -77,7 +82,7 @@ it('marks backfill complete using the latest preferences for the same token', as
     ...config,
     auto: 'off',
     backfill: 'done',
-    backfillRevision: 2,
+    backfillRevision: BACKFILL_REVISION,
   })
 })
 

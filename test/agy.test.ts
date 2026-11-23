@@ -105,11 +105,14 @@ function database(
     db.close()
   }
 }
-const row = (tokens: number, model = 'gemini-3.5-flash') => ({
+const row = (tokens: number, model = 'gemini-3.5-flash', input = 1000) => ({
   date: '2026-11-15',
   tool: 'agy',
   model,
+  provider: model.startsWith('gemini-') ? 'google' : 'unknown',
   tokens,
+  input,
+  output: tokens - input,
 })
 
 it('adds input and inclusive output on the KST date and skips unrelated wire fields', async () => {
@@ -144,7 +147,7 @@ it('counts equal step indices from different db stems without response ids', asy
   // When
   const result = await readAgy(options)
   // Then
-  expect(result.rows).toEqual([row(2074, 'agy')])
+  expect(result.rows).toEqual([row(2074, 'agy', 2000)])
 })
 it.each([true, false])(
   'falls back to primary model or agy when enum is unknown (%s)',
@@ -310,7 +313,7 @@ it('uses the first duplicate field and first name per enum', async () => {
   // When
   const result = await readAgy(options)
   // Then
-  expect(result.rows).toEqual([row(10, 'first')])
+  expect(result.rows).toEqual([row(10, 'first', 7)])
 })
 it('treats invalid UTF-8 model names as absent', async () => {
   // Given

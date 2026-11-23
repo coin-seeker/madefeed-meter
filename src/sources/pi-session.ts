@@ -1,6 +1,13 @@
 import { stat } from 'node:fs/promises'
 import { basename } from 'node:path'
-import { count, jsonLines, modelName, record, timestamp } from '../aggregate'
+import {
+  count,
+  jsonLines,
+  modelName,
+  providerName,
+  record,
+  timestamp,
+} from '../aggregate'
 import type { SourceOptions, SourceResult, UsageRow } from '../aggregate'
 import { kstDateOf } from '../kst'
 
@@ -81,7 +88,12 @@ export async function readPiSessions(
             date: kstDateOf(ms),
             tool,
             model: modelName(message['model']),
+            provider: providerName(message['provider']),
             tokens,
+            input: count(usage['input']),
+            output: count(usage['output']),
+            cacheRead: count(usage['cacheRead']),
+            cacheWrite: count(usage['cacheWrite']),
           },
         })
     }

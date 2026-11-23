@@ -9,6 +9,7 @@ import { aggregate, payload, MAX_ROW_TOKENS } from '../src/aggregate'
 import { kstDateOf } from '../src/kst'
 
 const homes: string[] = []
+// SIZE_OK: shared temporary-home fixtures keep cross-source dedupe and full wire-field assertions together.
 afterEach(async () => {
   await Promise.all(
     homes.splice(0).map((home) => rm(home, { recursive: true, force: true })),
@@ -31,12 +32,48 @@ async function homeFor(source: string) {
   return home
 }
 describe('usage readers', () => {
+  it('keeps the winning Claude snapshot parts and infers no provider for other models', async () => {
+    // Given
+    const home = await homeFor('claude')
+    await writeFile(
+      join(home, '.claude/projects/fixture/snapshots.jsonl'),
+      [
+        { input_tokens: 1, output_tokens: 2 },
+        { input_tokens: 3, output_tokens: 8 },
+        { input_tokens: 2, output_tokens: 1 },
+      ]
+        .map((usage) =>
+          JSON.stringify({
+            type: 'assistant',
+            timestamp: '2026-11-15T15:30:00Z',
+            requestId: 'snapshot',
+            message: { id: 'snapshot', model: 'other', usage },
+          }),
+        )
+        .join('\n'),
+    )
+    // When
+    const result = await readClaude({ home, sinceMs: 0, env: {} })
+    // Then
+    expect(result.rows.find((row) => row.model === 'other')).toEqual({
+      date: '2026-11-16',
+      tool: 'claude-code',
+      model: 'other',
+      provider: 'unknown',
+      tokens: 11,
+      input: 3,
+      output: 8,
+      cacheRead: 0,
+      cacheWrite: 0,
+    })
+  })
   it('aggregates rows above two billion and rejects sums above the new cap', () => {
     // Given
     const row = {
       date: '2026-11-15',
       tool: 'opencode' as const,
       model: 'model',
+      provider: 'unknown',
       tokens: 3_124_282_929,
     }
     // When / Then
@@ -82,13 +119,23 @@ describe('usage readers', () => {
         date: '2026-11-16',
         tool: 'claude-code',
         model: 'claude-test',
+        provider: 'anthropic',
         tokens: 100,
+        input: 10,
+        output: 20,
+        cacheRead: 40,
+        cacheWrite: 30,
       },
     ])
     expect(Object.keys(body).sort()).toEqual(['deviceName', 'rows'])
     expect(Object.keys(body.rows[0] ?? {}).sort()).toEqual([
+      'cacheRead',
+      'cacheWrite',
       'date',
+      'input',
       'model',
+      'output',
+      'provider',
       'tokens',
       'tool',
     ])
@@ -142,7 +189,13 @@ describe('usage readers', () => {
     })
     // Then
     expect(aggregate(result.rows)).toEqual([
-      { date: '2026-11-16', tool: 'codex', model: 'gpt-test', tokens: 70 },
+      {
+        date: '2026-11-16',
+        tool: 'codex',
+        model: 'gpt-test',
+        provider: 'unknown',
+        tokens: 70,
+      },
     ])
   })
   it('buckets UTC 15:30 on the next KST date at the midnight boundary', () => {
@@ -215,7 +268,13 @@ describe('usage readers', () => {
     })
     // Then
     expect(aggregate(result.rows)).toEqual([
-      { date: '2026-11-16', tool: 'opencode', model: 'unknown', tokens: 15 },
+      {
+        date: '2026-11-16',
+        tool: 'opencode',
+        model: 'unknown',
+        provider: 'unknown',
+        tokens: 15,
+      },
     ])
   })
 })

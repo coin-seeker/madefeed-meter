@@ -44,7 +44,13 @@ async function put(
   await utimes(path, new Date(mtime), new Date(mtime))
 }
 function row(tokens = 70) {
-  return { date: '2026-11-16', tool: 'codex', model: 'gpt-test', tokens }
+  return {
+    date: '2026-11-16',
+    tool: 'codex',
+    model: 'gpt-test',
+    provider: 'unknown',
+    tokens,
+  }
 }
 
 it('reads compressed rollouts with the same rows as plain rollouts', async () => {

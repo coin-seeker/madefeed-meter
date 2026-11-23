@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import { runCli } from '../src/cli'
+import { BACKFILL_REVISION } from '../src/backfill'
 import { MeterError } from '../src/aggregate'
 import { readConfig, saveConfig } from '../src/config'
 import { cliFixture } from './cli-fixtures'
@@ -68,7 +69,7 @@ it.each([[], ['--scheduled']])(
     await saveConfig(home, {
       ...config,
       backfill: 'done',
-      backfillRevision: 2,
+      backfillRevision: BACKFILL_REVISION,
       auto: 'off',
     })
     // When

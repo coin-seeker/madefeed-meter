@@ -2,6 +2,7 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { runCli } from '../src/cli'
+import { BACKFILL_REVISION } from '../src/backfill'
 import { saveConfig } from '../src/config'
 import { agentPath } from '../src/agent'
 import { config } from './schedule-fixtures'
@@ -42,7 +43,7 @@ it('prints diagnostics and one timestamped result while uploading only the three
     ...config,
     auto: 'on',
     backfill: 'done',
-    backfillRevision: 2,
+    backfillRevision: BACKFILL_REVISION,
   })
   const database = join(home, '.local/share/opencode')
   await mkdir(database, { recursive: true })
@@ -60,6 +61,7 @@ it('prints diagnostics and one timestamped result while uploading only the three
           date: '2026-11-16',
           tool: 'gemini',
           model: 'gemini-test',
+          provider: 'google',
           tokens: 12,
         },
       ],

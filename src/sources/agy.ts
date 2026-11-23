@@ -76,12 +76,17 @@ export async function readAgy(options: SourceOptions): Promise<SourceResult> {
       return { supported: false, rows: [], reason: failure }
     return {
       supported: true,
-      rows: result.totals.map(([date, model, tokens]) => ({
+      rows: result.totals.map(([date, model, tokens, input, output]) => ({
         date,
         tool: 'agy',
         // Model ids have no slash here; a path-like string is not a model name.
         model: model.includes('/') ? 'unknown' : modelName(model),
+        provider:
+          !model.includes('/') && modelName(model).startsWith('gemini-')
+            ? 'google'
+            : 'unknown',
         tokens,
+        ...(input + output > 0 ? { input, output } : {}),
       })),
     }
   } catch (error) {

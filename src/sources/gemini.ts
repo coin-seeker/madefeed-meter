@@ -15,6 +15,10 @@ type Event = {
   readonly ms: number
   readonly model: string
   readonly tokens: number
+  readonly input?: number
+  readonly output?: number
+  readonly cacheRead?: number
+  readonly reasoning?: number
 }
 type Context = {
   readonly model?: string
@@ -78,6 +82,14 @@ function event(raw: unknown, context: Context): Event | undefined {
   return {
     model,
     tokens: sum,
+    ...(input + output + cached + thoughts + tool > 0
+      ? {
+          input: net + tool,
+          output: output + thoughts,
+          cacheRead: cached,
+          reasoning: thoughts,
+        }
+      : {}),
     ms: time(data['timestamp'], time(data['created_at'], context.ms)),
   }
 }
@@ -176,14 +188,18 @@ export async function readGemini(
           const events = path.endsWith('.jsonl')
             ? await jsonlEvents(path, mtime)
             : jsonEvents(parseJson(await readFile(path, 'utf8')), mtime)
-          for (const event of events)
-            if (event.ms >= options.sinceMs)
+          for (const event of events) {
+            const { ms, model: rawModel, ...usage } = event
+            const model = modelName(rawModel)
+            if (ms >= options.sinceMs)
               rows.push({
-                date: kstDateOf(event.ms),
+                date: kstDateOf(ms),
                 tool: 'gemini',
-                model: modelName(event.model),
-                tokens: event.tokens,
+                model,
+                provider: model.startsWith('gemini-') ? 'google' : 'unknown',
+                ...usage,
               })
+          }
         } catch (error) {
           if (!(error instanceof Error)) throw error
           // One unreadable file must not hide other sessions.

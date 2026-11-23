@@ -10,6 +10,7 @@ import {
   record,
   timestamp,
   modelName,
+  providerName,
   unsupported,
 } from '../aggregate'
 import type { SourceOptions, SourceResult, UsageRow } from '../aggregate'
@@ -107,12 +108,22 @@ export async function readCodex(options: SourceOptions): Promise<SourceResult> {
       throw new ZstdUnavailableError()
     for (const path of paths) {
       let model = 'unknown'
+      let provider = 'unknown'
       let previous = 0
+      let previousUsage: Record<string, unknown> = {}
       for await (const line of rolloutLines(path, zstd)) {
-        if (!line.includes('"turn_context"') && !line.includes('"token_count"'))
+        if (
+          !line.includes('"turn_context"') &&
+          !line.includes('"token_count"') &&
+          !line.includes('"session_meta"')
+        )
           continue
         const event = record(parseJson(line))
         const data = record(event['payload'])
+        if (event['type'] === 'session_meta') {
+          provider = providerName(data['model_provider'])
+          continue
+        }
         if (event['type'] === 'turn_context') {
           model = modelName(data['model'])
           continue
@@ -120,7 +131,8 @@ export async function readCodex(options: SourceOptions): Promise<SourceResult> {
         if (event['type'] !== 'event_msg' || data['type'] !== 'token_count')
           continue
         const info = record(data['info'])
-        const total = record(info['total_token_usage'])['total_tokens']
+        const cumulative = record(info['total_token_usage'])
+        const total = cumulative['total_tokens']
         if (
           typeof total !== 'number' ||
           !Number.isSafeInteger(total) ||
@@ -131,14 +143,44 @@ export async function readCodex(options: SourceOptions): Promise<SourceResult> {
           total >= previous
             ? total - previous
             : count(record(info['last_token_usage'])['total_tokens'])
+        const reset = total < previous
+        const usage = reset ? record(info['last_token_usage']) : cumulative
+        const difference = (name: string) =>
+          Math.max(
+            0,
+            count(usage[name]) - (reset ? 0 : count(previousUsage[name])),
+          )
+        const cacheRead = difference('cached_input_tokens')
+        const cacheWrite = difference('cache_write_input_tokens')
+        const input = Math.max(
+          0,
+          difference('input_tokens') - cacheRead - cacheWrite,
+        )
+        const output = difference('output_tokens')
+        const reasoning = difference('reasoning_output_tokens')
+        const reported =
+          (typeof usage['input_tokens'] === 'number' ||
+            typeof usage['output_tokens'] === 'number') &&
+          [
+            'input_tokens',
+            'output_tokens',
+            'cached_input_tokens',
+            'cache_write_input_tokens',
+            'reasoning_output_tokens',
+          ].some((name) => count(usage[name]) > 0)
         previous = total
+        previousUsage = cumulative
         const ms = timestamp(event['timestamp'])
         if (Number.isFinite(ms) && ms >= options.sinceMs && delta > 0)
           rows.push({
             date: kstDateOf(ms),
             tool: 'codex',
             model,
+            provider,
             tokens: delta,
+            ...(reported
+              ? { input, output, cacheRead, cacheWrite, reasoning }
+              : {}),
           })
       }
     }

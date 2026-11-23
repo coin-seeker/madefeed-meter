@@ -9,6 +9,7 @@ import {
   record,
   timestamp,
   modelName,
+  providerName,
   MeterError,
   unsupported,
 } from '../aggregate'
@@ -65,6 +66,11 @@ async function legacyRows(root: string, options: SourceOptions) {
     if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) continue
     const tokens = record(raw)
     const cache = record(tokens['cache'])
+    const input = count(tokens['input'])
+    const reasoning = count(tokens['reasoning'])
+    const output = count(tokens['output']) + reasoning
+    const cacheRead = count(cache['read'])
+    const cacheWrite = count(cache['write'])
     const sum = Math.max(
       count(tokens['total']),
       count(tokens['input']) +
@@ -80,7 +86,11 @@ async function legacyRows(root: string, options: SourceOptions) {
       date: kstDateOf(ms),
       tool: 'opencode',
       model: modelName(data['modelID']),
+      provider: providerName(data['providerID']),
       tokens: sum,
+      ...(input + output + cacheRead + cacheWrite > 0
+        ? { input, output, cacheRead, cacheWrite, reasoning }
+        : {}),
     })
   }
   return rows
@@ -129,12 +139,29 @@ export async function readOpenCode(
         if ('error' in result)
           return { supported: false, reason: failure, rows: [] }
         rows.push(
-          ...result.totals.map(([date, model, tokens]) => ({
-            date,
-            tool: 'opencode' as const,
-            model: modelName(model),
-            tokens,
-          })),
+          ...result.totals.map(
+            ([
+              date,
+              model,
+              provider,
+              tokens,
+              input,
+              output,
+              cacheRead,
+              cacheWrite,
+              reasoning,
+              reported,
+            ]) => ({
+              date,
+              tool: 'opencode' as const,
+              model: modelName(model),
+              provider: providerName(provider),
+              tokens,
+              ...(reported
+                ? { input, output, cacheRead, cacheWrite, reasoning }
+                : {}),
+            }),
+          ),
         )
         for (const id of result.knownIds) seen.add(id)
       }

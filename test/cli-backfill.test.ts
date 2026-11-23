@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { runCli } from '../src/cli'
+import { BACKFILL_REVISION } from '../src/backfill'
 import { readConfig, saveConfig } from '../src/config'
 import { config } from './schedule-fixtures'
 import { cliFixture } from './cli-fixtures'
@@ -54,18 +55,20 @@ it.each(['login', 'upload'])(
         deviceName: expect.any(String),
         machineId: 'a'.repeat(64),
         backfill: true,
-        backfillRevision: 2,
+        backfillRevision: BACKFILL_REVISION,
         rows: expect.arrayContaining([
           {
             date: '2026-10-18',
             tool: 'gemini',
             model: '2026-10-18',
+            provider: 'unknown',
             tokens: 1,
           },
           {
             date: '2026-11-16',
             tool: 'gemini',
             model: 'after-token',
+            provider: 'unknown',
             tokens: 2,
           },
         ]),
@@ -73,7 +76,7 @@ it.each(['login', 'upload'])(
     ])
     expect(JSON.stringify(bodies)).not.toContain('2026-10-17')
     expect((await readConfig(home))?.backfill).toBe('done')
-    expect((await readConfig(home))?.backfillRevision).toBe(2)
+    expect((await readConfig(home))?.backfillRevision).toBe(BACKFILL_REVISION)
     expect(output).toHaveLength(1)
     expect(JSON.parse(output.join(''))).toEqual({
       ...(command === 'login' ? { loggedIn: true } : {}),
@@ -106,14 +109,21 @@ it.each([[], ['--scheduled']])(
       {
         deviceName: config.deviceName,
         backfill: true,
-        backfillRevision: 2,
+        backfillRevision: BACKFILL_REVISION,
         machineId: 'a'.repeat(64),
         rows: [
-          { date: '2026-11-12', tool: 'gemini', model: 'old', tokens: 99 },
+          {
+            date: '2026-11-12',
+            tool: 'gemini',
+            model: 'old',
+            provider: 'unknown',
+            tokens: 99,
+          },
           {
             date: '2026-11-16',
             tool: 'gemini',
             model: 'gemini-test',
+            provider: 'google',
             tokens: 12,
           },
         ],
@@ -126,6 +136,7 @@ it.each([[], ['--scheduled']])(
             date: '2026-11-16',
             tool: 'gemini',
             model: 'gemini-test',
+            provider: 'google',
             tokens: 12,
           },
         ],
@@ -135,7 +146,7 @@ it.each([[], ['--scheduled']])(
       ...config,
       auto: 'off',
       backfill: 'done',
-      backfillRevision: 2,
+      backfillRevision: BACKFILL_REVISION,
     })
   },
 )
@@ -206,7 +217,13 @@ it('keeps dry-run offline and leaves a legacy backfill pending', async () => {
   expect(JSON.parse(output.join(''))).toEqual({
     deviceName: config.deviceName,
     rows: [
-      { date: '2026-11-16', tool: 'gemini', model: 'gemini-test', tokens: 12 },
+      {
+        date: '2026-11-16',
+        tool: 'gemini',
+        model: 'gemini-test',
+        provider: 'google',
+        tokens: 12,
+      },
     ],
   })
   expect(await readConfig(home)).toEqual(legacy)
@@ -215,7 +232,11 @@ it('keeps dry-run offline and leaves a legacy backfill pending', async () => {
 it('preserves the completed marker through automatic upload preference changes', async () => {
   // Given
   const { runtime, home } = await cliFixture()
-  await saveConfig(home, { ...config, backfill: 'done', backfillRevision: 2 })
+  await saveConfig(home, {
+    ...config,
+    backfill: 'done',
+    backfillRevision: BACKFILL_REVISION,
+  })
   // When
   await runCli(['auto', 'on'], runtime)
   await runCli(['auto', 'off'], runtime)
@@ -223,7 +244,7 @@ it('preserves the completed marker through automatic upload preference changes',
   expect(await readConfig(home)).toEqual({
     ...config,
     backfill: 'done',
-    backfillRevision: 2,
+    backfillRevision: BACKFILL_REVISION,
     auto: 'off',
   })
 })

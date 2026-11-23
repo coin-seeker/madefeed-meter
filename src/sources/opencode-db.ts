@@ -4,9 +4,21 @@ export type DatabaseInput = {
   readonly legacyIds: readonly string[]
   readonly excludedIds: readonly string[]
 }
+type Total = [
+  string,
+  string,
+  string | null,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  boolean,
+]
 export type DatabaseResult =
   | {
-      readonly totals: readonly (readonly [string, string, number])[]
+      readonly totals: readonly Readonly<Total>[]
       readonly knownIds: readonly string[]
     }
   | { readonly error: true }
@@ -39,12 +51,14 @@ export function databaseWorker(input: DatabaseInput): DatabaseResult {
           : 0
       const ids = new Set<string>()
       const excluded = new Set(input.excludedIds)
-      const totals = new Map<string, [string, string, number]>()
+      const totals = new Map<string, Total>()
       const numeric = (path: string) =>
         `CASE WHEN json_type(m.data,'${path}') IN ('integer','real') THEN json_extract(m.data,'${path}') ELSE 0 END`
       const projection = (
         model: string,
+        provider: string,
       ) => `coalesce(json_extract(m.data,'$.time.created'),m.time_created) AS ms,
+        ${provider} AS provider,
         ${model} AS model, json_type(m.data,'$.tokens') AS token_type,
         ${numeric('$.tokens.total')} AS total,
         ${numeric('$.tokens.input')} AS input,
@@ -75,9 +89,24 @@ export function databaseWorker(input: DatabaseInput): DatabaseResult {
         const tokens = Math.max(parts, number(row['total']))
         if (tokens === 0) return
         const date = new Date(ms + 32_400_000).toISOString().slice(0, 10)
-        const key = JSON.stringify([date, model])
+        const provider =
+          typeof row['provider'] === 'string' ? row['provider'] : null
+        const key = JSON.stringify([date, model, provider])
         const previous = totals.get(key)
-        totals.set(key, [date, model, (previous?.[2] ?? 0) + tokens])
+        totals.set(key, [
+          date,
+          model,
+          provider,
+          (previous?.[3] ?? 0) + tokens,
+          (previous?.[4] ?? 0) + number(row['input']),
+          (previous?.[5] ?? 0) +
+            number(row['output']) +
+            number(row['reasoning']),
+          (previous?.[6] ?? 0) + number(row['cache_read']),
+          (previous?.[7] ?? 0) + number(row['cache_write']),
+          (previous?.[8] ?? 0) + number(row['reasoning']),
+          (previous?.[9] ?? false) || parts > 0,
+        ])
         if (typeof id === 'string') ids.add(id)
       }
       const since = input.sinceMs - 86_400_000
@@ -85,7 +114,7 @@ export function databaseWorker(input: DatabaseInput): DatabaseResult {
       const hasV2 = exists('session_message')
       const hasId = hasMessage && columns('message').has('id')
       if (hasMessage) {
-        const fields = `${hasId ? 'm.id' : 'NULL AS id'}, ${projection("json_extract(m.data,'$.modelID')")}`
+        const fields = `${hasId ? 'm.id' : 'NULL AS id'}, ${projection("json_extract(m.data,'$.modelID')", "json_extract(m.data,'$.providerID')")}`
         let statement
         try {
           statement = db.prepare(
@@ -161,7 +190,7 @@ export function databaseWorker(input: DatabaseInput): DatabaseResult {
         const model =
           "coalesce(json_extract(m.data,'$.model.id'),json_extract(m.data,'$.model.modelID'),json_extract(m.data,'$.modelID'))"
         const statement = db.prepare(
-          `SELECT m.id,m.session_id,m.type,m.seq,m.time_created, json_extract(m.data,'$.status') AS status, ${projection(model)} FROM session_message m WHERE m.time_created >= ?`,
+          `SELECT m.id,m.session_id,m.type,m.seq,m.time_created, json_extract(m.data,'$.status') AS status, ${projection(model, "coalesce(json_extract(m.data,'$.model.providerID'),json_extract(m.data,'$.providerID'))")} FROM session_message m WHERE m.time_created >= ?`,
         )
         for (const row of statement.iterate(since)) {
           if (

@@ -36,7 +36,7 @@ export const backfillDeferred =
 export const dryRunHeader =
   '전송하지 않았어요. 아래 합계와 JSON만 전송 대상이에요.'
 export const dryRunColumns =
-  'date        tool         model                         tokens'
+  'date        tool         provider        model                         tokens'
 export const localFailure =
   '로컬 사용량 또는 설정을 처리할 수 없어요. 접근 권한과 Node.js 버전을 확인해 주세요.'
 export const disconnected = `서버에서 이 기기 연결이 끊겨 있어요. 자동 전송과 이 컴퓨터의 연결 정보를 지웠어요. 다시 연결하려면 ${RUN} 를 실행해 주세요.`

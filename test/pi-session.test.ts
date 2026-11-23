@@ -25,7 +25,11 @@ it('keeps the earlier fork response across sorted files, before event-window fil
   await session(join(root, 'z.jsonl'), [
     event({
       timestamp: '2026-11-14T16:00:00Z',
-      message: message({ responseId: 'fork', usage: { input: 7 } }),
+      message: message({
+        responseId: 'fork',
+        provider: 'OpenAI',
+        usage: { input: 7 },
+      }),
     }),
     event({
       timestamp: '2026-11-14T14:59:59Z',
@@ -36,7 +40,17 @@ it('keeps the earlier fork response across sorted files, before event-window fil
   const result = await readPi(options)
   // Then
   expect(result.rows).toEqual([
-    { date: '2026-11-15', tool: 'pi', model: 'model', tokens: 7 },
+    {
+      date: '2026-11-15',
+      tool: 'pi',
+      model: 'model',
+      provider: 'openai',
+      tokens: 7,
+      input: 7,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+    },
   ])
 })
 
@@ -115,7 +129,17 @@ it.each([-1, 1.5, '999', Number.MAX_SAFE_INTEGER + 1, null])(
     const result = await readPi(options)
     // Then
     expect(result.rows).toEqual([
-      { date: '2026-11-16', tool: 'pi', model: 'unknown', tokens: 10 },
+      {
+        date: '2026-11-16',
+        tool: 'pi',
+        model: 'unknown',
+        provider: 'unknown',
+        tokens: 10,
+        input: 1,
+        output: 2,
+        cacheRead: 3,
+        cacheWrite: 4,
+      },
     ])
   },
 )
@@ -197,8 +221,28 @@ it('uses ISO then numeric message time then mtime, with inclusive file/event cut
   const result = await readPi(options)
   // Then
   expect(aggregate(result.rows)).toEqual([
-    { date: '2026-11-15', tool: 'pi', model: 'model', tokens: 30 },
-    { date: '2026-11-16', tool: 'pi', model: 'model', tokens: 10 },
+    {
+      date: '2026-11-15',
+      tool: 'pi',
+      model: 'model',
+      provider: 'unknown',
+      tokens: 30,
+      input: 3,
+      output: 6,
+      cacheRead: 9,
+      cacheWrite: 12,
+    },
+    {
+      date: '2026-11-16',
+      tool: 'pi',
+      model: 'model',
+      provider: 'unknown',
+      tokens: 10,
+      input: 1,
+      output: 2,
+      cacheRead: 3,
+      cacheWrite: 4,
+    },
   ])
 })
 

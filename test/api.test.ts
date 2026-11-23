@@ -117,7 +117,7 @@ it('stops login polling on expired_token', async () => {
   ).rejects.toThrow('만료')
   expect(calls).toBe(1)
 })
-it('chunks uploads to 200 rows and projects only private-safe fields', async () => {
+it('chunks uploads to 100 rows and projects only private-safe fields', async () => {
   // Given
   const bodies: unknown[] = []
   const url = await stub((req, res) => {
@@ -140,6 +140,7 @@ it('chunks uploads to 200 rows and projects only private-safe fields', async () 
     date: '2026-11-16',
     tool: 'codex' as const,
     model: `model-${i}`,
+    provider: 'openai',
     tokens: 1,
     prompt: 'SECRET-PROMPT',
     path: '/Users/x/secret-repo',
@@ -152,12 +153,12 @@ it('chunks uploads to 200 rows and projects only private-safe fields', async () 
   // Then
   expect(
     bodies.map((body) => JSON.stringify(body).match(/"date"/g)?.length),
-  ).toEqual([200, 200, 1])
+  ).toEqual([100, 100, 100, 100, 1])
   expect(JSON.stringify(bodies)).not.toMatch(
     /SECRET-PROMPT|secret-repo|prompt|path/,
   )
   expect(bodies).toEqual(
-    Array.from({ length: 3 }, () =>
+    Array.from({ length: 5 }, () =>
       expect.objectContaining({ machineId: 'b'.repeat(64) }),
     ),
   )
@@ -176,7 +177,13 @@ it.each([401, 422])('reports HTTP %i without retrying', async (status) => {
       { url, fetch },
       'mfd_test',
       payload('test-device', [
-        { date: '2026-11-16', tool: 'codex', model: 'gpt', tokens: 1 },
+        {
+          date: '2026-11-16',
+          tool: 'codex',
+          model: 'gpt',
+          provider: 'openai',
+          tokens: 1,
+        },
       ]),
     ),
   ).rejects.toThrow(String(status))
@@ -211,10 +218,11 @@ it.each([
         })
       },
     }
-    const rows = Array.from({ length: 401 }, (_, index) => ({
+    const rows = Array.from({ length: 201 }, (_, index) => ({
       date: '2026-11-16',
       tool: 'codex' as const,
       model: `model-${index}`,
+      provider: 'openai',
       tokens: 1,
     }))
     // When
@@ -225,7 +233,7 @@ it.each([
     })
     // Then
     expect(bodies).toEqual(
-      [0, 200, 400].map(() => ({
+      [0, 100, 200].map(() => ({
         deviceName: 'device',
         rows: expect.any(Array),
         backfill: true,
@@ -234,7 +242,7 @@ it.each([
     )
     expect(
       bodies.map((body) => JSON.stringify(body).match(/"date"/g)?.length),
-    ).toEqual([200, 200, 1])
+    ).toEqual([100, 100, 1])
     expect(result).toEqual({
       accepted: 6,
       ignored: 9,

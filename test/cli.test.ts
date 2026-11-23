@@ -110,7 +110,13 @@ it('includes Gemini in the real dry-run body with an isolated environment', asyn
       type: 'gemini',
       model: 'gemini-test',
       timestamp: '2026-11-15T15:00:00Z',
-      tokens: { total: 3_000_000_000 },
+      tokens: {
+        total: 3_000_000_000,
+        input: 100,
+        output: 20,
+        cached: 30,
+        thoughts: 5,
+      },
     }),
   )
   const output: string[] = []
@@ -131,7 +137,12 @@ it('includes Gemini in the real dry-run body with an isolated environment', asyn
       date: '2026-11-16',
       tool: 'gemini',
       model: 'gemini-test',
+      provider: 'google',
       tokens: 3_000_000_000,
+      input: 100,
+      output: 25,
+      cacheRead: 30,
+      reasoning: 5,
     },
   ])
 })

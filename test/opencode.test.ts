@@ -4,6 +4,85 @@ import { join } from 'node:path'
 import { aggregate } from '../src/aggregate'
 import { readOpenCode } from '../src/sources/opencode'
 import { database, fixture, legacy, sinceMs } from './opencode-fixtures'
+// SIZE_OK: the reader contract covers both SQLite schemas, fork boundaries and legacy precedence with full wire assertions.
+
+it('carries recorded providers and parts through message, v2 and legacy readers', async () => {
+  // Given
+  const options = await fixture()
+  const db = database(options.root)
+  const tokens = {
+    input: 10,
+    output: 2,
+    reasoning: 3,
+    cache: { read: 4, write: 5 },
+  }
+  db.prepare('INSERT INTO message VALUES (?,?,?,?,?)').run(
+    'db',
+    's',
+    sinceMs,
+    sinceMs,
+    JSON.stringify({ modelID: 'model', providerID: 'OpenAI', tokens }),
+  )
+  db.exec(
+    'CREATE TABLE session_message(id TEXT PRIMARY KEY,session_id TEXT,type TEXT,seq INTEGER,time_created INTEGER,data TEXT)',
+  )
+  db.prepare('INSERT INTO session_message VALUES (?,?,?,?,?,?)').run(
+    'v2',
+    's',
+    'assistant',
+    1,
+    sinceMs,
+    JSON.stringify({
+      model: { id: 'model', providerID: 'OpenRouter' },
+      providerID: 'wrong',
+      tokens,
+    }),
+  )
+  db.close()
+  const directory = join(options.root, 'storage/message/s')
+  await mkdir(directory, { recursive: true })
+  await writeFile(
+    join(directory, 'legacy.json'),
+    JSON.stringify({
+      modelID: 'model',
+      providerID: 'Anthropic',
+      time: { created: sinceMs },
+      tokens,
+    }),
+  )
+  await writeFile(
+    join(directory, 'total.json'),
+    JSON.stringify({
+      modelID: 'total',
+      time: { created: sinceMs },
+      tokens: { total: 7 },
+    }),
+  )
+  // When
+  const result = await readOpenCode(options)
+  // Then
+  expect(aggregate(result.rows)).toEqual([
+    ...['anthropic', 'openai', 'openrouter'].map((provider) => ({
+      date: '2026-11-15',
+      tool: 'opencode',
+      model: 'model',
+      provider,
+      tokens: 24,
+      input: 10,
+      output: 5,
+      cacheRead: 4,
+      cacheWrite: 5,
+      reasoning: 3,
+    })),
+    {
+      date: '2026-11-15',
+      tool: 'opencode',
+      model: 'total',
+      provider: 'unknown',
+      tokens: 7,
+    },
+  ])
+})
 
 it.each([undefined, '', 'custom'])(
   'uses Windows roots only when OPENCODE_DATA_DIR is unset (%s)',
@@ -102,8 +181,25 @@ it('reads the real session index and applies max, payload time, zero and KST rul
   // Then
   expect(result.supported).toBe(true)
   expect(aggregate(result.rows)).toEqual([
-    { date: '2026-11-15', tool: 'opencode', model: 'model', tokens: 74 },
-    { date: '2026-11-16', tool: 'opencode', model: 'model', tokens: 9 },
+    {
+      date: '2026-11-15',
+      tool: 'opencode',
+      model: 'model',
+      provider: 'unknown',
+      tokens: 74,
+      input: 18,
+      output: 5,
+      cacheRead: 4,
+      cacheWrite: 5,
+      reasoning: 3,
+    },
+    {
+      date: '2026-11-16',
+      tool: 'opencode',
+      model: 'model',
+      provider: 'unknown',
+      tokens: 9,
+    },
   ])
 })
 
@@ -180,7 +276,13 @@ it('counts v2 assistants and completed compactions but excludes copied fork rows
   // Then
   expect(result.supported).toBe(true)
   expect(aggregate(result.rows)).toEqual([
-    { date: '2026-11-15', tool: 'opencode', model: 'model', tokens: 53 },
+    {
+      date: '2026-11-15',
+      tool: 'opencode',
+      model: 'model',
+      provider: 'unknown',
+      tokens: 53,
+    },
   ])
 })
 

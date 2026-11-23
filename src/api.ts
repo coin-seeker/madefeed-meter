@@ -1,6 +1,7 @@
 import { setTimeout } from 'node:timers/promises'
 import { MeterError, record, payload } from './aggregate'
 import type { UsagePayload } from './aggregate'
+import { uploadChunks } from './chunks'
 import { ApiError, post } from './api-http'
 import type { Api } from './api-http'
 export { ApiError } from './api-http'
@@ -168,14 +169,13 @@ export async function uploadUsage(
   let backfill: UploadResult['backfill'] = null
   let bankVotes: number | undefined
   const safe = payload(body.deviceName, body.rows)
-  let offset = 0
-  do {
+  for (const rows of uploadChunks(safe.rows)) {
     const { status, data } = await post(api, {
       path: '/api/meter/usage',
       token,
       body: {
         deviceName: safe.deviceName,
-        rows: safe.rows.slice(offset, offset + 200),
+        rows,
         ...(body.backfill
           ? {
               backfill: true,
@@ -211,8 +211,7 @@ export async function uploadUsage(
       default:
         throw new MeterError('사용량 저장 응답이 올바르지 않아요.')
     }
-    offset += 200
-  } while (offset < safe.rows.length)
+  }
   return {
     accepted,
     ignored,

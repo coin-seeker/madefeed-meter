@@ -6,6 +6,7 @@ import { aggregate } from '../src/aggregate'
 import { readGemini } from '../src/sources/gemini'
 
 const sinceMs = Date.parse('2026-11-14T15:00:00Z')
+// SIZE_OK: direct, JSONL and stats normalization fixtures assert the complete additive parts contract.
 const homes: string[] = []
 afterEach(async () => {
   for (const home of homes.splice(0))
@@ -29,7 +30,7 @@ it('reads session messages with cached input normalization, aliases and session-
       messages: [
         {
           type: 'gemini',
-          model: 'inclusive',
+          model: 'gemini-inclusive',
           tokens: { input: 100, cached: 40, output: 10, total: 110 },
         },
         {
@@ -66,10 +67,50 @@ it('reads session messages with cached input normalization, aliases and session-
   const result = await readGemini(options)
   // Then
   expect(aggregate(result.rows)).toEqual([
-    { date: '2026-11-15', tool: 'gemini', model: 'aliases', tokens: 24 },
-    { date: '2026-11-15', tool: 'gemini', model: 'exclusive', tokens: 150 },
-    { date: '2026-11-15', tool: 'gemini', model: 'inclusive', tokens: 110 },
-    { date: '2026-11-15', tool: 'gemini', model: 'larger', tokens: 99 },
+    {
+      date: '2026-11-15',
+      tool: 'gemini',
+      model: 'aliases',
+      provider: 'unknown',
+      tokens: 24,
+      input: 15,
+      output: 6,
+      cacheRead: 3,
+      reasoning: 4,
+    },
+    {
+      date: '2026-11-15',
+      tool: 'gemini',
+      model: 'exclusive',
+      provider: 'unknown',
+      tokens: 150,
+      input: 100,
+      output: 10,
+      cacheRead: 40,
+      reasoning: 0,
+    },
+    {
+      date: '2026-11-15',
+      tool: 'gemini',
+      model: 'gemini-inclusive',
+      provider: 'google',
+      tokens: 110,
+      input: 60,
+      output: 10,
+      cacheRead: 40,
+      reasoning: 0,
+    },
+    {
+      date: '2026-11-15',
+      tool: 'gemini',
+      model: 'larger',
+      provider: 'unknown',
+      tokens: 99,
+      input: 1,
+      output: 0,
+      cacheRead: 0,
+      reasoning: 0,
+    },
   ])
 })
 
@@ -116,7 +157,17 @@ it('replaces direct JSONL ids before window filtering and retains model hints an
   const result = await readGemini(options)
   // Then
   expect(aggregate(result.rows)).toEqual([
-    { date: '2026-11-16', tool: 'gemini', model: 'hint', tokens: 45 },
+    {
+      date: '2026-11-16',
+      tool: 'gemini',
+      model: 'hint',
+      provider: 'unknown',
+      tokens: 45,
+      input: 12,
+      output: 3,
+      cacheRead: 10,
+      reasoning: 0,
+    },
   ])
 })
 
@@ -156,9 +207,39 @@ it('reads stats per model and nested flat stats with the max rule', async () => 
   const result = await readGemini(options)
   // Then
   expect(aggregate(result.rows)).toEqual([
-    { date: '2026-11-15', tool: 'gemini', model: 'first', tokens: 112 },
-    { date: '2026-11-15', tool: 'gemini', model: 'second', tokens: 100 },
-    { date: '2026-11-15', tool: 'gemini', model: 'unknown', tokens: 7 },
+    {
+      date: '2026-11-15',
+      tool: 'gemini',
+      model: 'first',
+      provider: 'unknown',
+      tokens: 112,
+      input: 60,
+      output: 12,
+      cacheRead: 40,
+      reasoning: 2,
+    },
+    {
+      date: '2026-11-15',
+      tool: 'gemini',
+      model: 'second',
+      provider: 'unknown',
+      tokens: 100,
+      input: 7,
+      output: 7,
+      cacheRead: 0,
+      reasoning: 4,
+    },
+    {
+      date: '2026-11-15',
+      tool: 'gemini',
+      model: 'unknown',
+      provider: 'unknown',
+      tokens: 7,
+      input: 3,
+      output: 4,
+      cacheRead: 0,
+      reasoning: 0,
+    },
   ])
 })
 
@@ -189,7 +270,13 @@ it('honors comma roots without cross-file dedupe and skips old or invalid files'
   })
   // Then
   expect(aggregate(result.rows)).toEqual([
-    { date: '2026-11-15', tool: 'gemini', model: 'model', tokens: 16 },
+    {
+      date: '2026-11-15',
+      tool: 'gemini',
+      model: 'model',
+      provider: 'unknown',
+      tokens: 16,
+    },
   ])
 })
 

@@ -58,13 +58,19 @@ export async function readClaude(
             count(usage['cache_creation_input_tokens']) +
             count(usage['cache_read_input_tokens'])
           const key = JSON.stringify([message['id'], event['requestId']])
+          const model = modelName(message['model'])
           // Streaming/resumed snapshots may repeat with a larger final output count.
           if (tokens > (messages.get(key)?.tokens ?? -1))
             messages.set(key, {
               date: kstDateOf(ms),
               tool: 'claude-code',
-              model: modelName(message['model']),
+              model,
+              provider: model.startsWith('claude-') ? 'anthropic' : 'unknown',
               tokens,
+              input: count(usage['input_tokens']),
+              output: count(usage['output_tokens']),
+              cacheRead: count(usage['cache_read_input_tokens']),
+              cacheWrite: count(usage['cache_creation_input_tokens']),
             })
         }
       }

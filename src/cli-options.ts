@@ -16,7 +16,7 @@ export type Runtime = AutoRuntime & {
   readonly zstd?: Decompressor | null
 }
 
-export const VERSION = '0.6.0'
+export const VERSION = '0.7.0'
 export const help = helpText(VERSION)
 
 export function cliOptions(args: readonly string[]) {

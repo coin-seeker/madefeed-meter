@@ -3,7 +3,15 @@ export type DatabaseInput = {
   readonly sinceMs: number
 }
 export type DatabaseResult =
-  | { readonly totals: readonly (readonly [string, string, number])[] }
+  | {
+      readonly totals: readonly (readonly [
+        string,
+        string,
+        number,
+        number,
+        number,
+      ])[]
+    }
   | { readonly error: true }
 
 // Stringified into an eval worker: all runtime dependencies stay in this body.
@@ -88,7 +96,10 @@ export function databaseWorker(input: DatabaseInput): DatabaseResult {
     const { basename } = process.getBuiltinModule('node:path')
     const seen = new Set<string>()
     // Mutable aggregate is the only data sent back to the main thread.
-    const totals = new Map<string, readonly [string, string, number]>()
+    const totals = new Map<
+      string,
+      readonly [string, string, number, number, number]
+    >()
     for (const path of input.paths) {
       const db = new DatabaseSync(path, { readOnly: true })
       try {
@@ -117,7 +128,9 @@ export function databaseWorker(input: DatabaseInput): DatabaseResult {
             const step = parse(row['metadata'])
             const usage = message(step, 9)
             if (!usage) continue
-            const tokens = (number(usage, 2) ?? 0) + (number(usage, 3) ?? 0)
+            const inputTokens = number(usage, 2) ?? 0
+            const output = number(usage, 3) ?? 0
+            const tokens = inputTokens + output
             const seconds = number(message(step, 1), 1)
             if (tokens === 0 || seconds === undefined) continue
             const ms = seconds * 1000
@@ -150,7 +163,14 @@ export function databaseWorker(input: DatabaseInput): DatabaseResult {
             }
             const date = kstDateOf(ms)
             const key = JSON.stringify([date, model])
-            totals.set(key, [date, model, (totals.get(key)?.[2] ?? 0) + tokens])
+            const previous = totals.get(key)
+            totals.set(key, [
+              date,
+              model,
+              (previous?.[2] ?? 0) + tokens,
+              (previous?.[3] ?? 0) + inputTokens,
+              (previous?.[4] ?? 0) + output,
+            ])
           }
           db.exec('COMMIT')
         } catch (error) {

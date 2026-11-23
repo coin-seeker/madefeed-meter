@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import zlib from 'node:zlib'
 import { expect, it } from 'vitest'
 import { runCli } from '../src/cli'
+import { BACKFILL_REVISION } from '../src/backfill'
 import { readConfig, saveConfig } from '../src/config'
 import { zstdDecompressor } from '../src/zstd'
 import { cliFixture } from './cli-fixtures'
@@ -18,7 +19,7 @@ it.each(['available', 'unavailable', 'completed'] as const)(
     const saved = {
       ...config,
       backfill: 'done' as const,
-      ...(state === 'completed' ? { backfillRevision: 2 } : {}),
+      ...(state === 'completed' ? { backfillRevision: BACKFILL_REVISION } : {}),
     }
     await saveConfig(home, saved)
     const file = join(home, '.config/madefeed/cli.json')
@@ -41,9 +42,15 @@ it.each(['available', 'unavailable', 'completed'] as const)(
     const backfills = state === 'available'
     expect(bodies).toHaveLength(1)
     if (backfills) {
-      expect(bodies[0]).toMatchObject({ backfill: true, backfillRevision: 2 })
+      expect(bodies[0]).toMatchObject({
+        backfill: true,
+        backfillRevision: BACKFILL_REVISION,
+      })
       expect(JSON.stringify(bodies)).toContain('boundary')
-      expect(await readConfig(home)).toEqual({ ...saved, backfillRevision: 2 })
+      expect(await readConfig(home)).toEqual({
+        ...saved,
+        backfillRevision: BACKFILL_REVISION,
+      })
     } else {
       expect(bodies[0]).not.toHaveProperty('backfill')
       expect(bodies[0]).not.toHaveProperty('backfillRevision')
@@ -88,10 +95,13 @@ it('re-sums once where compressed Codex logs become readable after a first sum w
   // When: the same device uploads twice where compressed logs are readable.
   await runCli(['upload', '--no-auto'], { ...runtime, zstd: decompressor })
   await runCli(['upload', '--no-auto'], { ...runtime, zstd: decompressor })
-  // Then: revision 1 without Codex, revision 2 with it exactly once, then a plain upload.
+  // Then: revision 1 without Codex, current revision with it exactly once, then a plain upload.
   expect(bodies).toEqual([
     expect.objectContaining({ backfill: true, backfillRevision: 1 }),
-    expect.objectContaining({ backfill: true, backfillRevision: 2 }),
+    expect.objectContaining({
+      backfill: true,
+      backfillRevision: BACKFILL_REVISION,
+    }),
     expect.not.objectContaining({ backfill: true }),
   ])
   expect(JSON.stringify(bodies[0])).not.toContain('codex')
@@ -99,7 +109,7 @@ it('re-sums once where compressed Codex logs become readable after a first sum w
   expect(diagnostic[0]).toContain('22.15')
   expect(await readConfig(home)).toMatchObject({
     backfill: 'done',
-    backfillRevision: 2,
+    backfillRevision: BACKFILL_REVISION,
   })
 })
 
@@ -119,6 +129,28 @@ it('keeps the one-time re-sum when the Codex history cannot be read during it', 
   await compressedRollout(home, rollout)
   await runCli(['upload', '--no-auto'], { ...runtime, zstd: decompressor })
   // Then
-  expect(bodies[1]).toMatchObject({ backfill: true, backfillRevision: 2 })
-  expect(await readConfig(home)).toMatchObject({ backfillRevision: 2 })
+  expect(bodies[1]).toMatchObject({
+    backfill: true,
+    backfillRevision: BACKFILL_REVISION,
+  })
+  expect(await readConfig(home)).toMatchObject({
+    backfillRevision: BACKFILL_REVISION,
+  })
+})
+
+it('re-sums revision 2 once as revision 3 then sends plain uploads', async () => {
+  // Given
+  const { runtime, home, bodies } = await cliFixture()
+  const zstd = zstdDecompressor()
+  if (!zstd) throw new TypeError('test requires Node.js 22.15+')
+  await saveConfig(home, { ...config, backfill: 'done', backfillRevision: 2 })
+  // When
+  await runCli(['upload', '--no-auto'], { ...runtime, zstd })
+  await runCli(['upload', '--no-auto'], { ...runtime, zstd })
+  // Then
+  expect(bodies).toEqual([
+    expect.objectContaining({ backfill: true, backfillRevision: 3 }),
+    expect.not.objectContaining({ backfill: true }),
+  ])
+  expect(await readConfig(home)).toMatchObject({ backfillRevision: 3 })
 })

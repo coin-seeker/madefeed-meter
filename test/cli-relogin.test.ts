@@ -1,6 +1,7 @@
 import { PassThrough } from 'node:stream'
 import { expect, it } from 'vitest'
 import { runCli } from '../src/cli'
+import { BACKFILL_REVISION } from '../src/backfill'
 import { readConfig, saveConfig } from '../src/config'
 import { config } from './schedule-fixtures'
 import { cliFixture } from './cli-fixtures'
@@ -14,7 +15,7 @@ it.each(['revoked', 'unreachable', 'different-origin'])(
       ...config,
       deviceToken: 'mfd_old',
       backfill: 'done',
-      backfillRevision: 2,
+      backfillRevision: BACKFILL_REVISION,
     })
     const calls: {
       readonly url: string
@@ -36,7 +37,7 @@ it.each(['revoked', 'unreachable', 'different-origin'])(
         if (String(input).endsWith('/usage') && scenario !== 'different-origin')
           expect(await readConfig(home)).toMatchObject({
             backfill: 'done',
-            backfillRevision: 2,
+            backfillRevision: BACKFILL_REVISION,
           })
         return runtime.fetch(input, init)
       },
@@ -59,7 +60,7 @@ it.each(['revoked', 'unreachable', 'different-origin'])(
       url,
       deviceToken: 'mfd_test',
       backfill: 'done',
-      backfillRevision: 2,
+      backfillRevision: BACKFILL_REVISION,
     })
     expect(diagnostic).toEqual(
       scenario === 'unreachable'
