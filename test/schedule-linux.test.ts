@@ -10,6 +10,20 @@ import {
 import { jobEnvironment, schedulePaths } from '../src/schedule-builders'
 import { fixture } from './schedule-fixtures'
 
+it('passes the Antigravity and Hermes overrides to the job', async () => {
+  // Given
+  const { context } = await fixture('linux')
+  const env = {
+    ANTIGRAVITY_DATA_DIR: '/agy a,/agy b',
+    HERMES_HOME: '/hermes',
+    UNRELATED: 'x',
+  }
+  // When
+  const keys = jobEnvironment({ ...context, env }).map(([key]) => key)
+  // Then
+  expect(keys).toEqual(['ANTIGRAVITY_DATA_DIR', 'HERMES_HOME'])
+})
+
 it('installs systemd service and hourly persistent timer with quoted Unicode paths', async () => {
   // Given
   const { context, calls } = await fixture('linux')

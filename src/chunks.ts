@@ -1,5 +1,7 @@
 import { MeterError } from './aggregate'
-import type { UsageRow } from './aggregate'
+import type { Tool, UsageRow } from './aggregate'
+
+export const COMPLETE_TOOLS: readonly Tool[] = ['agy']
 
 export function uploadChunks(
   rows: readonly UsageRow[],
@@ -7,7 +9,11 @@ export function uploadChunks(
 ): UsageRow[][] {
   const groups = new Map<string, UsageRow[]>()
   for (const row of rows) {
-    const key = JSON.stringify([row.date, row.tool, row.model])
+    const key = JSON.stringify(
+      COMPLETE_TOOLS.includes(row.tool)
+        ? [row.date, row.tool]
+        : [row.date, row.tool, row.model],
+    )
     const group = groups.get(key) ?? []
     group.push(row)
     if (group.length > size)

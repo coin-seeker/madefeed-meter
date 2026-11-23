@@ -16,6 +16,34 @@ const row: UsageRow = {
   tokens: 10,
 }
 
+it('keeps every agy row of one date in one chunk', () => {
+  // Given
+  const rows: UsageRow[] = [
+    ...Array.from({ length: 60 }, (_, i) => ({ ...row, model: `codex-${i}` })),
+    ...[16, 17, 18].flatMap((day) =>
+      Array.from({ length: 30 }, (_, i) => ({
+        ...row,
+        date: `2026-11-${day}`,
+        tool: 'agy' as const,
+        model: `agy-${i}`,
+      })),
+    ),
+  ]
+  // When
+  const chunks = uploadChunks(rows, 100)
+  // Then
+  expect(chunks.flat()).toEqual(rows)
+  expect(chunks.every((chunk) => chunk.length <= 100)).toBe(true)
+  for (const day of [16, 17, 18])
+    expect(
+      chunks.filter((chunk) =>
+        chunk.some(
+          (item) => item.tool === 'agy' && item.date === `2026-11-${day}`,
+        ),
+      ),
+    ).toHaveLength(1)
+})
+
 it.each([
   ['OpenAI', 'openai'],
   ['with space', 'unknown'],

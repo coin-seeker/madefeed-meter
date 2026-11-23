@@ -1,7 +1,7 @@
 import { setTimeout } from 'node:timers/promises'
 import { MeterError, record, payload } from './aggregate'
 import type { UsagePayload } from './aggregate'
-import { uploadChunks } from './chunks'
+import { COMPLETE_TOOLS, uploadChunks } from './chunks'
 import { ApiError, post } from './api-http'
 import type { Api } from './api-http'
 export { ApiError } from './api-http'
@@ -170,12 +170,16 @@ export async function uploadUsage(
   let bankVotes: number | undefined
   const safe = payload(body.deviceName, body.rows)
   for (const rows of uploadChunks(safe.rows)) {
+    const completeTools = COMPLETE_TOOLS.filter((tool) =>
+      rows.some((row) => row.tool === tool),
+    )
     const { status, data } = await post(api, {
       path: '/api/meter/usage',
       token,
       body: {
         deviceName: safe.deviceName,
         rows,
+        ...(completeTools.length ? { completeTools } : {}),
         ...(body.backfill
           ? {
               backfill: true,

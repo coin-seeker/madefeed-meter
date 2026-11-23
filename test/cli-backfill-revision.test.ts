@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import zlib from 'node:zlib'
 import { expect, it } from 'vitest'
@@ -138,19 +138,81 @@ it('keeps the one-time re-sum when the Codex history cannot be read during it', 
   })
 })
 
-it('re-sums revision 2 once as revision 3 then sends plain uploads', async () => {
-  // Given
+it.each([2, 3])(
+  're-sums revision %i once as revision 4 then sends plain uploads',
+  async (revision) => {
+    // Given
+    const { runtime, home, bodies } = await cliFixture()
+    const zstd = zstdDecompressor()
+    if (!zstd) throw new TypeError('test requires Node.js 22.15+')
+    await saveConfig(home, {
+      ...config,
+      backfill: 'done',
+      backfillRevision: revision,
+    })
+    // When
+    await runCli(['upload', '--no-auto'], { ...runtime, zstd })
+    await runCli(['upload', '--no-auto'], { ...runtime, zstd })
+    // Then
+    expect(bodies).toEqual([
+      expect.objectContaining({ backfill: true, backfillRevision: 4 }),
+      expect.not.objectContaining({ backfill: true }),
+    ])
+    expect(await readConfig(home)).toMatchObject({ backfillRevision: 4 })
+  },
+)
+
+it.each([
+  {
+    title: 'claims revision 3 while Hermes cannot be read, then 4 once it can',
+    directory: '.hermes',
+    file: 'state.db',
+    reason: 'Hermes 기록을 읽지 못해 이번에는 빼고 올려요.',
+  },
+  {
+    title: 'claims revision 3 while Antigravity cannot be read',
+    directory: '.gemini/antigravity/conversations',
+    file: 'x.db',
+    reason: 'Antigravity 기록을 읽지 못해 이번에는 빼고 올려요.',
+  },
+])('$title', async ({ directory, file, reason }) => {
+  // Given: a first sum with an unreadable source in an isolated home.
+  const { runtime, home, bodies, diagnostic } = await cliFixture()
+  const zstd = zstdDecompressor()
+  if (!zstd) throw new TypeError('test requires Node.js 22.15+')
+  await saveConfig(home, config)
+  const root = join(home, directory)
+  await mkdir(root, { recursive: true })
+  await writeFile(join(root, file), 'not sqlite')
+  // When: the source recovers before the second of three uploads.
+  await runCli(['upload', '--no-auto'], { ...runtime, zstd })
+  await rm(root, { recursive: true })
+  await runCli(['upload', '--no-auto'], { ...runtime, zstd })
+  await runCli(['upload', '--no-auto'], { ...runtime, zstd })
+  // Then: the failed read preserves a revision-4 re-sum for the recovery.
+  expect(bodies).toEqual([
+    expect.objectContaining({ backfill: true, backfillRevision: 3 }),
+    expect.objectContaining({ backfill: true, backfillRevision: 4 }),
+    expect.not.objectContaining({ backfill: true }),
+  ])
+  expect(diagnostic).toContain(reason)
+  expect(await readConfig(home)).toMatchObject({ backfillRevision: 4 })
+})
+
+it('keeps a revision-3 device without a backfill while Hermes cannot be read', async () => {
+  // Given: a revision-3 device and an unreadable Hermes database.
   const { runtime, home, bodies } = await cliFixture()
   const zstd = zstdDecompressor()
   if (!zstd) throw new TypeError('test requires Node.js 22.15+')
-  await saveConfig(home, { ...config, backfill: 'done', backfillRevision: 2 })
+  await saveConfig(home, { ...config, backfill: 'done', backfillRevision: 3 })
+  const file = join(home, '.config/madefeed/cli.json')
+  const before = await readFile(file, 'utf8')
+  await mkdir(join(home, '.hermes'), { recursive: true })
+  await writeFile(join(home, '.hermes/state.db'), 'not sqlite')
   // When
   await runCli(['upload', '--no-auto'], { ...runtime, zstd })
-  await runCli(['upload', '--no-auto'], { ...runtime, zstd })
-  // Then
-  expect(bodies).toEqual([
-    expect.objectContaining({ backfill: true, backfillRevision: 3 }),
-    expect.not.objectContaining({ backfill: true }),
-  ])
-  expect(await readConfig(home)).toMatchObject({ backfillRevision: 3 })
+  // Then: a partial read cannot upgrade the device or rewrite its config.
+  expect(bodies).toEqual([expect.not.objectContaining({ backfill: true })])
+  expect(bodies[0]).not.toHaveProperty('backfillRevision')
+  expect(await readFile(file, 'utf8')).toBe(before)
 })

@@ -1,3 +1,4 @@
+// SIZE_OK: HTTP upload and device-flow scenarios share the loopback server fixture.
 import { afterEach, expect, it } from 'vitest'
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -5,6 +6,40 @@ import { requestDevice, pollToken, uploadUsage } from '../src/api'
 import { payload } from '../src/aggregate'
 
 const cleanup: (() => Promise<void>)[] = []
+it('declares agy complete only in chunks that carry agy rows', async () => {
+  // Given
+  const bodies: unknown[] = []
+  const api = {
+    url: 'https://example.com',
+    fetch: async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)))
+      return Response.json({ accepted: 1, weekTokens: 0, votesGranted: 0 })
+    },
+  }
+  const rows = [
+    ...Array.from({ length: 100 }, (_, i) => ({
+      date: '2026-11-16',
+      tool: 'codex' as const,
+      model: `gpt-${String(i).padStart(3, '0')}`,
+      provider: 'openai',
+      tokens: 1,
+    })),
+    {
+      date: '2026-11-17',
+      tool: 'agy' as const,
+      model: 'gemini',
+      provider: 'google',
+      tokens: 1,
+    },
+  ]
+  // When
+  await uploadUsage(api, 'mfd_test', payload('device', rows))
+  // Then
+  expect(bodies).toEqual([
+    { deviceName: 'device', rows: rows.slice(0, 100) },
+    { deviceName: 'device', rows: rows.slice(100), completeTools: ['agy'] },
+  ])
+})
 it('sends exactly one heartbeat request when rows are empty', async () => {
   // Given
   const bodies: unknown[] = []

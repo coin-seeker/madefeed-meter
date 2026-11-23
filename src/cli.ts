@@ -16,7 +16,7 @@ import type { Runtime } from './cli-options'
 import { cliOptions, help, VERSION } from './cli-options'
 import * as copy from './copy'
 import { cleanDisconnected, runLogout } from './disconnect'
-import { BACKFILL_REVISION, backfillLevel } from './backfill'
+import { BACKFILL_REVISION, CODEX_REVISION, backfillLevel } from './backfill'
 import { zstdDecompressor } from './zstd'
 export type { Runtime } from './cli-options'
 
@@ -183,10 +183,14 @@ export async function runCli(
     zstd,
   }
   // Dry-run gathers without authentication or any network requests.
-  const { results: sources, codex } = await readSources(options)
-  // Revision 3 claims the Codex history: a run that could not read it counts as
-  // revision 1 at most, so the one-time re-sum stays available for a later run.
-  const revision = codex ? BACKFILL_REVISION : 1
+  const { results: sources, codex, agy, hermes } = await readSources(options)
+  // Revision 4 claims Codex, Antigravity and Hermes; Codex alone claims 3;
+  // without Codex the claim is 1, so the re-sum stays available.
+  const revision = !codex
+    ? 1
+    : agy && hermes
+      ? BACKFILL_REVISION
+      : CODEX_REVISION
   const backfill = history && (first || done < revision)
   for (const source of sources) if (source.reason) diagnostic(source.reason)
   const rows = aggregate(
