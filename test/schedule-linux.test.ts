@@ -7,7 +7,7 @@ import {
   removeSchedule,
   scheduleStatus,
 } from '../src/schedule'
-import { schedulePaths } from '../src/schedule-builders'
+import { jobEnvironment, schedulePaths } from '../src/schedule-builders'
 import { fixture } from './schedule-fixtures'
 
 it('installs systemd service and hourly persistent timer with quoted Unicode paths', async () => {
@@ -157,4 +157,30 @@ it('quotes environment values for systemd and cron without ambient variables', a
     buildCron({ ...context, agent: '/different agent.mjs' }).split(' ')[0],
   )
   expect(Number(cron.split(' ')[0])).toBeLessThan(60)
+})
+it('passes the source directory overrides to the job after the original four keys', async () => {
+  // Given
+  const { context } = await fixture('linux')
+  const env = {
+    OMO_CODING_AGENT_SESSION_DIR: '/omo sessions',
+    CODEX_HOME: '/codex a,/codex b',
+    MADEFEED_URL: 'https://example.com',
+    CLAUDE_CONFIG_DIR: '/claude',
+    PI_CODING_AGENT_DIR: '/pi',
+    PI_CODING_AGENT_SESSION_DIR: '/pi sessions',
+    OMO_CODING_AGENT_DIR: '/omo',
+    UNRELATED: 'excluded',
+  }
+  // When
+  const keys = jobEnvironment({ ...context, env }).map(([key]) => key)
+  // Then
+  expect(keys).toEqual([
+    'MADEFEED_URL',
+    'CODEX_HOME',
+    'CLAUDE_CONFIG_DIR',
+    'PI_CODING_AGENT_DIR',
+    'PI_CODING_AGENT_SESSION_DIR',
+    'OMO_CODING_AGENT_DIR',
+    'OMO_CODING_AGENT_SESSION_DIR',
+  ])
 })

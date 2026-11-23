@@ -22,6 +22,12 @@ export const environmentKeys = [
   'XDG_DATA_HOME',
   'GEMINI_DATA_DIR',
   'MADEFEED_URL',
+  'CODEX_HOME',
+  'CLAUDE_CONFIG_DIR',
+  'PI_CODING_AGENT_DIR',
+  'PI_CODING_AGENT_SESSION_DIR',
+  'OMO_CODING_AGENT_DIR',
+  'OMO_CODING_AGENT_SESSION_DIR',
 ] as const
 export function jobEnvironment(
   context: ScheduleContext,

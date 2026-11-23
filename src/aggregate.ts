@@ -2,8 +2,17 @@ import { createReadStream } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
+import type { Decompressor } from './zstd'
 
-export type Tool = 'claude-code' | 'codex' | 'opencode' | 'gemini'
+export type Tool =
+  | 'claude-code'
+  | 'codex'
+  | 'opencode'
+  | 'gemini'
+  | 'pi'
+  | 'omp'
+  | 'omo'
+  | 'agy'
 export const MAX_ROW_TOKENS = 100_000_000_000
 export type UsageRow = {
   readonly date: string
@@ -15,6 +24,8 @@ export type SourceOptions = {
   readonly home: string
   readonly sinceMs: number
   readonly env?: Readonly<Record<string, string | undefined>>
+  /** Omitted: detect at run time. `null`: this runtime cannot read zstd. */
+  readonly zstd?: Decompressor | null
 }
 export type SourceResult = {
   readonly supported: boolean
