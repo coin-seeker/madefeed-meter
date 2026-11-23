@@ -5,6 +5,36 @@ import { aggregate } from '../src/aggregate'
 import { readOpenCode } from '../src/sources/opencode'
 import { database, fixture, legacy, sinceMs } from './opencode-fixtures'
 
+it.each([undefined, '', 'custom'])(
+  'uses Windows roots only when OPENCODE_DATA_DIR is unset (%s)',
+  async (custom) => {
+    // Given
+    const options = await fixture()
+    const local = join(options.home, 'local')
+    const roaming = join(options.home, 'roaming')
+    await legacy(join(local, 'opencode'), 'same', 7)
+    await legacy(join(roaming, 'opencode'), 'same', 999)
+    await legacy(join(roaming, 'opencode'), 'distinct', 11)
+    await legacy(options.root, 'default', 13)
+    // When
+    const result = await readOpenCode({
+      ...options,
+      env: {
+        LOCALAPPDATA: local,
+        APPDATA: roaming,
+        ...(custom === undefined
+          ? {}
+          : { OPENCODE_DATA_DIR: custom === '' ? '' : options.root }),
+      },
+    })
+    // Then
+    expect(result.supported).toBe(true)
+    expect(aggregate(result.rows).map((row) => row.tokens)).toEqual(
+      custom === undefined ? [31] : custom === '' ? [] : [13],
+    )
+  },
+)
+
 it('reads the real session index and applies max, payload time, zero and KST rules', async () => {
   // Given
   const options = await fixture()

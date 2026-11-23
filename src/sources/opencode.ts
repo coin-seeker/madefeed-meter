@@ -1,5 +1,5 @@
 import { readFile, readdir, stat } from 'node:fs/promises'
-import { basename, isAbsolute, join } from 'node:path'
+import { basename, isAbsolute, join, resolve } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import {
   count,
@@ -100,10 +100,16 @@ export async function readOpenCode(
             xdg && isAbsolute(xdg)
               ? join(xdg, 'opencode')
               : join(options.home, '.local/share/opencode'),
+            ...[env['LOCALAPPDATA'], env['APPDATA']].flatMap((dir) =>
+              dir ? [join(dir, 'opencode')] : [],
+            ),
           ]
     const rows: UsageRow[] = []
     const seen = new Set<string>()
-    for (const root of roots) {
+    const uniqueRoots = new Map(
+      roots.filter(Boolean).map((root) => [resolve(root), root]),
+    )
+    for (const root of uniqueRoots.values()) {
       if (!root || !(await directory(root))) continue
       const legacy = await legacyRows(root, options)
       const entries = await readdir(root, { withFileTypes: true })

@@ -96,6 +96,41 @@ describe('usage readers', () => {
       /SECRET-PROMPT|secret-repo|\/Users/,
     )
   })
+  it('deduplicates Claude snapshots across default and comma-configured roots', async () => {
+    // Given
+    const home = await homeFor('claude')
+    const custom = join(home, 'custom')
+    const second = join(home, 'second')
+    for (const [root, id, tokens] of [
+      [join(home, '.config/claude'), 'duplicate', 17],
+      [custom, 'duplicate', 23],
+      [second, 'distinct', 31],
+    ] as const) {
+      await mkdir(join(root, 'projects'), { recursive: true })
+      await writeFile(
+        join(root, 'projects/session.jsonl'),
+        JSON.stringify({
+          type: 'assistant',
+          timestamp: '2026-11-15T15:30:00Z',
+          requestId: 'request',
+          message: {
+            id,
+            model: 'claude-test',
+            usage: { input_tokens: tokens },
+          },
+        }),
+      )
+    }
+    // When
+    const result = await readClaude({
+      home,
+      sinceMs: Date.parse('2026-11-15'),
+      env: { CLAUDE_CONFIG_DIR: `,${custom},${custom}/.,,${second},` },
+    })
+    // Then
+    expect(result.supported).toBe(true)
+    expect(aggregate(result.rows)[0]?.tokens).toBe(154)
+  })
   it('adds zero for repeated Codex cumulative events and handles reset and pre-window baseline', async () => {
     // Given
     const home = await homeFor('codex')
