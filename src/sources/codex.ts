@@ -1,9 +1,11 @@
-import { join, basename } from 'node:path'
+import { join, basename, resolve } from 'node:path'
 import {
   count,
   directory,
   files,
-  jsonLines,
+  textLines,
+  parseJson,
+  ZstdUnavailableError,
   recentFile,
   record,
   timestamp,
@@ -12,24 +14,81 @@ import {
 } from '../aggregate'
 import type { SourceOptions, SourceResult, UsageRow } from '../aggregate'
 import { kstDateOf } from '../kst'
+import { zstdDecompressor } from '../zstd'
+import type { Decompressor } from '../zstd'
+
+export async function* rolloutLines(
+  path: string,
+  zstd?: Decompressor,
+): AsyncGenerator<string> {
+  let read = false
+  try {
+    for await (const line of textLines(path, zstd)) {
+      read = true
+      yield line
+    }
+  } catch (error) {
+    if (
+      read ||
+      !(error instanceof Error) ||
+      !('code' in error) ||
+      error.code !== 'ENOENT'
+    )
+      throw error
+    const counterpart = path.endsWith('.zst')
+      ? path.slice(0, -4)
+      : `${path}.zst`
+    yield* textLines(counterpart, zstd)
+  }
+}
+
+async function rollouts(options: SourceOptions): Promise<readonly string[]> {
+  const homes = new Map<string, string>()
+  for (const home of [
+    join(options.home, '.codex'),
+    ...(options.env?.['CODEX_HOME']?.split(',') ?? []),
+  ])
+    if (home) homes.set(resolve(home), home)
+  const chosen = new Map<string, string>()
+  for (const home of homes.values()) {
+    for (const name of ['sessions', 'archived_sessions']) {
+      const root = join(home, name)
+      if (!(await directory(root))) continue
+      for await (const path of files(root)) {
+        const name = basename(path)
+        if (
+          !name.startsWith('rollout-') ||
+          !(name.endsWith('.jsonl') || name.endsWith('.jsonl.zst'))
+        )
+          continue
+        const key = name.endsWith('.zst') ? name.slice(0, -4) : name
+        if (!chosen.has(key) || name.endsWith('.jsonl')) chosen.set(key, path)
+      }
+    }
+  }
+  const recent: string[] = []
+  for (const path of chosen.values())
+    if (await recentFile(path, options.sinceMs)) recent.push(path)
+  return recent
+}
 
 export async function readCodex(options: SourceOptions): Promise<SourceResult> {
   const rows: UsageRow[] = []
   try {
-    const root = join(options.home, '.codex/sessions')
-    // A tool that was never used here is an empty result, not a warning.
-    if (!(await directory(root))) return { supported: true, rows: [] }
-    for await (const path of files(root)) {
-      if (
-        !basename(path).startsWith('rollout-') ||
-        !path.endsWith('.jsonl') ||
-        !(await recentFile(path, options.sinceMs))
-      )
-        continue
+    const paths = await rollouts(options)
+    const zstd =
+      options.zstd === undefined
+        ? zstdDecompressor()
+        : (options.zstd ?? undefined)
+    if (!zstd && paths.some((path) => path.endsWith('.zst')))
+      throw new ZstdUnavailableError()
+    for (const path of paths) {
       let model = 'unknown'
       let previous = 0
-      for await (const value of jsonLines(path)) {
-        const event = record(value)
+      for await (const line of rolloutLines(path, zstd)) {
+        if (!line.includes('"turn_context"') && !line.includes('"token_count"'))
+          continue
+        const event = record(parseJson(line))
         const data = record(event['payload'])
         if (event['type'] === 'turn_context') {
           model = modelName(data['model'])
@@ -62,6 +121,8 @@ export async function readCodex(options: SourceOptions): Promise<SourceResult> {
     }
     return { supported: true, rows }
   } catch (error) {
+    if (error instanceof ZstdUnavailableError)
+      return { supported: false, rows: [], reason: error.message }
     return unsupported(error, 'Codex 기록을 읽지 못해 이번에는 빼고 올려요.')
   }
 }

@@ -2,6 +2,8 @@ import { createReadStream } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
+import { pipeline } from 'node:stream'
+import { StringDecoder } from 'node:string_decoder'
 import type { Decompressor } from './zstd'
 
 export type Tool =
@@ -116,10 +118,59 @@ export async function* files(root: string): AsyncGenerator<string> {
   }
 }
 export async function* jsonLines(path: string): AsyncGenerator<unknown> {
+  for await (const line of textLines(path)) yield parseJson(line)
+}
+export class ZstdUnavailableError extends MeterError {
+  constructor() {
+    super(
+      '압축된 Codex 기록을 읽으려면 Node.js 22.15 이상이 필요해서 이번에는 Codex를 빼고 올려요.',
+    )
+  }
+}
+function cleanLine(line: string): string {
+  const start = line.charCodeAt(0) === 0xfeff ? 1 : 0
+  const end = line.endsWith('\r') ? line.length - 1 : line.length
+  return start === 0 && end === line.length ? line : line.slice(start, end)
+}
+export async function* textLines(
+  path: string,
+  zstd?: Decompressor,
+): AsyncGenerator<string> {
+  if (path.endsWith('.zst')) {
+    if (!zstd) throw new ZstdUnavailableError()
+    const stream = pipeline(createReadStream(path), zstd(), () => {
+      // pipeline destroys both ends on failure; async iteration observes the error.
+    })
+    const decoder = new StringDecoder('utf8')
+    // One rollout line can be tens of megabytes: keep its pieces apart and
+    // look for the newline only in the piece that just arrived.
+    const parts: string[] = []
+    try {
+      const chunks: AsyncIterable<Uint8Array> = stream
+      for await (const chunk of chunks) {
+        const text = decoder.write(chunk)
+        let start = 0
+        let end = text.indexOf('\n')
+        while (end >= 0) {
+          parts.push(text.slice(start, end))
+          yield cleanLine(parts.join(''))
+          parts.length = 0
+          start = end + 1
+          end = text.indexOf('\n', start)
+        }
+        if (start < text.length) parts.push(text.slice(start))
+      }
+      const rest = parts.join('') + decoder.end()
+      if (rest) yield cleanLine(rest)
+    } finally {
+      stream.destroy()
+    }
+    return
+  }
   const stream = createReadStream(path, { encoding: 'utf8' })
   const reader = createInterface({ input: stream, crlfDelay: Infinity })
   try {
-    for await (const line of reader) yield parseJson(line)
+    for await (const line of reader) yield cleanLine(line)
   } finally {
     reader.close()
     stream.destroy()
