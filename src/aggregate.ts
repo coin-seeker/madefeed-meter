@@ -14,6 +14,7 @@ export type Tool =
   | 'pi'
   | 'omp'
   | 'omo'
+  | 'gjc'
   | 'agy'
 export const MAX_ROW_TOKENS = 100_000_000_000
 export type UsageRow = {

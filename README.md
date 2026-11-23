@@ -69,7 +69,7 @@ npx @the-seeker/madefeed@latest
 
 ## 읽는 곳
 
-Claude Code, Codex, OpenCode, Gemini CLI, Pi, oh-my-pi, OmO, Antigravity의 로컬 사용 기록을 읽기 전용으로 읽어요. Antigravity는 CLI 기록만 읽고 IDE의 암호화된 기록은 읽지 않아요. CLI 형식은 공개되지 않아 바뀌면 읽을 수 없는 값을 추측해 세지 않아요. Cursor는 아직 지원하지 않아요.
+Claude Code, Codex, OpenCode, Gemini CLI, Pi, oh-my-pi, OmO, Gajae Code(GJC), Antigravity의 로컬 사용 기록을 읽기 전용으로 읽어요. Antigravity는 CLI 기록만 읽고 IDE의 암호화된 기록은 읽지 않아요. CLI 형식은 공개되지 않아 바뀌면 읽을 수 없는 값을 추측해 세지 않아요. Cursor는 아직 지원하지 않아요.
 
 CLI는 실행 중인 운영체제의 홈을 읽어요. 도구를 WSL에서 실행한다면 CLI도 WSL에서 실행해요. Windows에서 `CODEX_HOME`이나 `CLAUDE_CONFIG_DIR`에 `\\wsl.localhost\Ubuntu\home\me\.codex` 같은 UNC 경로를 쉼표로 구분해 추가할 수 있지만 WSL을 자동으로 찾지는 않아요.
 

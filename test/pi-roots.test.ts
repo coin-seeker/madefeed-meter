@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { readPi } from '../src/sources/pi'
 import { readOmp } from '../src/sources/omp'
 import { readOmo } from '../src/sources/omo'
+import { readGjc } from '../src/sources/gjc'
 import { event, fixture, session, textFile } from './pi-fixtures'
 
 it('expands Pi agent and env custom dirs but scans custom dirs flat and main sessions at depth one', async () => {
@@ -247,3 +248,20 @@ it.each([
     })
   },
 )
+
+it('reads Gajae Code main sessions and their subagent artifacts', async () => {
+  // Given
+  const options = await fixture()
+  const paths = [
+    '.gjc/agent/sessions/v2-p/a.jsonl',
+    '.gjc/agent/sessions/v2-p/a/sub.jsonl',
+    '.gjc/agent/sessions/v2-p/a/run/child.jsonl',
+  ]
+  for (const path of [...paths, '.gjc/agent/sessions/flat.jsonl'])
+    await session(join(options.home, path), [event({ id: path })])
+  // When
+  const result = await readGjc(options)
+  // Then
+  expect(result.supported).toBe(true)
+  expect(result.rows.map((row) => row.tool)).toEqual(['gjc', 'gjc', 'gjc'])
+})
