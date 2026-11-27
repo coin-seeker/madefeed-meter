@@ -7,8 +7,6 @@ import {
   parseJson,
   providerName,
   record,
-  textLines,
-  timestamp,
   unsupported,
 } from '../aggregate'
 import type { SourceOptions, SourceResult, UsageRow } from '../aggregate'
@@ -16,6 +14,7 @@ import { kstDateOf } from '../kst'
 import { listRoots } from './roots'
 import { capped } from './row-cap'
 import { inferProvider } from './vendor'
+import { droidSessionTime, readDroidSession } from './droid-session'
 
 const failure = 'Droid 기록을 읽지 못해 이번에는 빼고 올려요.'
 function text(value: unknown): string | undefined {
@@ -75,33 +74,11 @@ function defaultModel(provider: string): string {
       return provider === 'unknown' ? 'unknown' : `${provider}-unknown`
   }
 }
-async function sidecarModel(path: string): Promise<string | undefined> {
-  try {
-    let index = 0
-    for await (const line of textLines(
-      path.replace(/\.settings\.json$/, '.jsonl'),
-    )) {
-      if (index++ >= 500) break
-      const tail = line
-        .split('Model:')[1]
-        ?.split(/["\\[]/)[0]
-        ?.trim()
-      if (tail) return tail
-    }
-    return undefined
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      'code' in error &&
-      ['ENOENT', 'EACCES', 'EPERM', 'EISDIR', 'ENOTDIR'].includes(
-        String(error.code),
-      )
-    )
-      return undefined
-    throw error
-  }
+type Snapshot = {
+  readonly ms: number
+  readonly updatedMs: number
+  readonly row: UsageRow
 }
-type Snapshot = { readonly ms: number; readonly row: UsageRow }
 async function snapshot(path: string): Promise<Snapshot | undefined> {
   const settings = record(parseJson(await readFile(path, 'utf8')))
   const usage = record(settings['tokenUsage'])
@@ -113,14 +90,16 @@ async function snapshot(path: string): Promise<Snapshot | undefined> {
   const sum = input + output + cacheWrite + cacheRead
   const tokens = Math.max(sum, count(usage['totalTokens']))
   if (!tokens) return undefined
+  const metadata = await stat(path)
+  const session = await readDroidSession(path)
+  const ms = droidSessionTime(settings, session, metadata.birthtimeMs)
+  if (ms === undefined) return undefined
   const locked = normalizeProvider(settings['providerLock'])
-  const logged = text(settings['model']) ?? (await sidecarModel(path))
+  const logged = text(settings['model']) ?? session.model
   const model = modelName(
     (logged ? normalizeModel(logged) : '') || defaultModel(locked),
   )
   const provider = locked === 'unknown' ? inferProvider(model) : locked
-  const loggedMs = timestamp(settings['providerLockTimestamp'])
-  const ms = Number.isFinite(loggedMs) ? loggedMs : (await stat(path)).mtimeMs
   const parts: Partial<
     Record<
       'input' | 'output' | 'cacheRead' | 'cacheWrite' | 'reasoning',
@@ -144,6 +123,7 @@ async function snapshot(path: string): Promise<Snapshot | undefined> {
   }
   return {
     ms,
+    updatedMs: metadata.mtimeMs,
     row: {
       date: kstDateOf(ms),
       tool: 'droid',
@@ -171,7 +151,10 @@ export async function readDroid(options: SourceOptions): Promise<SourceResult> {
       try {
         const parsed = await snapshot(path)
         const id = basename(path, '.settings.json')
-        if (parsed && parsed.ms >= (sessions.get(id)?.ms ?? -Infinity))
+        if (
+          parsed &&
+          parsed.updatedMs >= (sessions.get(id)?.updatedMs ?? -Infinity)
+        )
           sessions.set(id, parsed)
       } catch (error) {
         if (

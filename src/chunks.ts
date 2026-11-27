@@ -1,7 +1,7 @@
 import { MeterError } from './aggregate'
 import type { Tool, UsageRow } from './aggregate'
 
-export const COMPLETE_TOOLS: readonly Tool[] = ['agy']
+export const COMPLETE_TOOLS: readonly Tool[] = ['agy', 'droid', 'goose']
 
 export function uploadChunks(
   rows: readonly UsageRow[],

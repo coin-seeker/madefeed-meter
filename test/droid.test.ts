@@ -40,7 +40,7 @@ it('normalizes model and includes thinking in output but not twice in total', as
 })
 it('selects the latest snapshot per session before window filtering', async () => {
   // Given
-  await writeDroid(
+  const latest = await writeDroid(
     home,
     {
       ...droidSettings,
@@ -53,6 +53,11 @@ it('selects the latest snapshot per session before window filtering', async () =
     home,
     droidSettings,
     '.factory/sessions/z/shared.settings.json',
+  )
+  await utimes(
+    latest,
+    new Date('2026-12-01T00:00:00Z'),
+    new Date('2026-12-01T00:00:00Z'),
   )
   // When
   const result = await read(Date.parse('2026-11-18T00:00:00Z'))
@@ -92,11 +97,12 @@ it('ignores sidecar models beyond line 500 and falls back to provider model', as
     expect.objectContaining({ model: 'gemini-unknown', provider: 'vertex_ai' }),
   ])
 })
-it('uses mtime when providerLockTimestamp is invalid', async () => {
+it('uses creation time when providerLockTimestamp is invalid', async () => {
   // Given
   const path = await writeDroid(home, {
     ...droidSettings,
     providerLockTimestamp: 'invalid',
+    createdAt: '2026-11-20T16:00:00Z',
   })
   const ms = Date.parse('2026-11-20T16:00:00Z')
   await utimes(path, new Date(ms), new Date(ms))
