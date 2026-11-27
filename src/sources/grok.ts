@@ -13,6 +13,7 @@ import {
 } from '../aggregate'
 import type { SourceOptions, SourceResult, UsageRow } from '../aggregate'
 import { kstDateOf } from '../kst'
+import { inferProvider } from './vendor'
 
 const failure = 'Grok Build 기록을 읽지 못해 이번에는 빼고 올려요.'
 
@@ -132,7 +133,7 @@ export async function readGrok(options: SourceOptions): Promise<SourceResult> {
                 date: kstDateOf(ms),
                 tool: 'grok',
                 model,
-                provider: model.startsWith('grok-') ? 'xai' : 'unknown',
+                provider: inferProvider(model),
                 tokens,
                 input: input - cacheRead - cacheWrite,
                 output,

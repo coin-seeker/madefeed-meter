@@ -12,6 +12,7 @@ import {
 } from '../aggregate'
 import type { SourceOptions, SourceResult, UsageRow } from '../aggregate'
 import { kstDateOf } from '../kst'
+import { inferProvider } from './vendor'
 
 export async function readClaude(
   options: SourceOptions,
@@ -65,7 +66,7 @@ export async function readClaude(
               date: kstDateOf(ms),
               tool: 'claude-code',
               model,
-              provider: model.startsWith('claude-') ? 'anthropic' : 'unknown',
+              provider: inferProvider(model),
               tokens,
               input: count(usage['input_tokens']),
               output: count(usage['output_tokens']),

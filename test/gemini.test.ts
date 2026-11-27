@@ -35,7 +35,7 @@ it('reads session messages with cached input normalization, aliases and session-
         },
         {
           type: 'gemini',
-          model: 'exclusive',
+          model: 'deepseek-v4-pro',
           tokens: { input: 100, cached: 40, output: 10 },
         },
         {
@@ -81,8 +81,8 @@ it('reads session messages with cached input normalization, aliases and session-
     {
       date: '2026-11-15',
       tool: 'gemini',
-      model: 'exclusive',
-      provider: 'unknown',
+      model: 'deepseek-v4-pro',
+      provider: 'deepseek',
       tokens: 150,
       input: 100,
       output: 10,

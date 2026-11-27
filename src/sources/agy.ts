@@ -14,6 +14,7 @@ import type { DatabaseInput, DatabaseResult } from './agy-db'
 import { antigravityProto } from './agy-proto'
 import { antigravityModels } from './agy-model'
 import { antigravityMerge } from './agy-merge'
+import { inferProvider } from './vendor'
 
 const failure = 'Antigravity 기록을 읽지 못해 이번에는 빼고 올려요.'
 
@@ -114,10 +115,9 @@ export async function readAgy(options: SourceOptions): Promise<SourceResult> {
           tool: 'agy',
           // Model ids have no slash here; a path-like string is not a model name.
           model: model.includes('/') ? 'unknown' : modelName(model),
-          provider:
-            !model.includes('/') && modelName(model).startsWith('gemini-')
-              ? 'google'
-              : 'unknown',
+          provider: model.includes('/')
+            ? 'unknown'
+            : inferProvider(modelName(model)),
           tokens,
           input,
           output,

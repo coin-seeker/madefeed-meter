@@ -352,10 +352,12 @@ it('prefilters updates files with mtime before sinceMs', async () => {
   // Then
   expect(result.rows).toEqual([])
 })
-it('infers xai only for grok-prefixed models', async () => {
+it('infers the model vendor even for non-Grok models', async () => {
   // Given
   await session([
-    turn({ usage: { modelUsage: { 'grok-test': usage, other: usage } } }),
+    turn({
+      usage: { modelUsage: { 'grok-test': usage, 'qwen3-coder': usage } },
+    }),
   ])
   // When
   const result = await read()
@@ -364,7 +366,7 @@ it('infers xai only for grok-prefixed models', async () => {
     result.rows.map(({ model, provider }) => ({ model, provider })),
   ).toEqual([
     { model: 'grok-test', provider: 'xai' },
-    { model: 'other', provider: 'unknown' },
+    { model: 'qwen3-coder', provider: 'alibaba' },
   ])
 })
 it('leaves Grok out when a day and model total passes the row limit', async () => {

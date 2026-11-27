@@ -10,6 +10,7 @@ import {
 } from '../aggregate'
 import type { SourceOptions, SourceResult, UsageRow } from '../aggregate'
 import { kstDateOf } from '../kst'
+import { inferProvider } from './vendor'
 
 type Event = {
   readonly ms: number
@@ -196,7 +197,7 @@ export async function readGemini(
                 date: kstDateOf(ms),
                 tool: 'gemini',
                 model,
-                provider: model.startsWith('gemini-') ? 'google' : 'unknown',
+                provider: inferProvider(model),
                 ...usage,
               })
           }

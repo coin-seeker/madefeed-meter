@@ -5,7 +5,6 @@ import { createInterface } from 'node:readline'
 import { pipeline } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
 import type { Decompressor } from './zstd'
-
 export type Tool =
   | 'claude-code'
   | 'codex'
@@ -17,6 +16,18 @@ export type Tool =
   | 'agy'
   | 'hermes'
   | 'grok'
+  | 'amp'
+  | 'droid'
+  | 'codebuff'
+  | 'cline'
+  | 'goose'
+  | 'openclaw'
+  | 'kilo'
+  | 'kimi'
+  | 'qwen'
+  | 'copilot'
+  | 'zcode'
+  | 'dsh'
 export const MAX_ROW_TOKENS = 100_000_000_000
 export type UsageRow = {
   readonly date: string
@@ -46,9 +57,7 @@ export type UsagePayload = {
   readonly deviceName: string
   readonly rows: readonly UsageRow[]
 }
-
 export class MeterError extends Error {}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -86,7 +95,6 @@ export function providerName(value: unknown): string {
     ? value.toLowerCase()
     : 'unknown'
 }
-
 const partNames = [
   'input',
   'output',
@@ -190,7 +198,7 @@ export async function* textLines(
   path: string,
   zstd?: Decompressor,
 ): AsyncGenerator<string> {
-  if (path.endsWith('.zst')) {
+  if (path.endsWith('.zst') || path.endsWith('.zstd')) {
     if (!zstd) throw new ZstdUnavailableError()
     const stream = pipeline(createReadStream(path), zstd(), () => {
       // pipeline destroys both ends on failure; async iteration observes the error.

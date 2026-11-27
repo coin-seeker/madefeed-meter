@@ -6,8 +6,47 @@ import {
   removeSchedule,
   scheduleStatus,
 } from '../src/schedule'
-import { schedulePaths } from '../src/schedule-builders'
+import {
+  buildCron,
+  buildService,
+  buildWrapper,
+  schedulePaths,
+} from '../src/schedule-builders'
 import { fixture } from './schedule-fixtures'
+
+it('forwards all new source overrides to every schedule format', async () => {
+  // Given
+  const { context } = await fixture()
+  const keys = [
+    'AMP_DATA_DIR',
+    'DROID_SESSIONS_DIR',
+    'CODEBUFF_DATA_DIR',
+    'CLINE_DATA_DIR',
+    'XDG_CONFIG_HOME',
+    'GOOSE_PATH_ROOT',
+    'OPENCLAW_DIR',
+    'KILO_DATA_DIR',
+    'KIMI_DATA_DIR',
+    'QWEN_DATA_DIR',
+    'COPILOT_HOME',
+    'ZCODE_HOME',
+    'DSH_HOME',
+  ]
+  const configured = {
+    ...context,
+    env: Object.fromEntries(keys.map((key) => [key, `/custom/${key}`])),
+  }
+  // When
+  const formats = [
+    buildPlist(configured),
+    buildService(configured),
+    buildCron(configured),
+    buildWrapper(configured),
+  ]
+  // Then
+  for (const output of formats)
+    for (const key of keys) expect(output).toContain(`/custom/${key}`)
+})
 
 it('removes the darwin plist before bootout', async () => {
   // Given

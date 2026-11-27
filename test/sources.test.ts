@@ -32,7 +32,7 @@ async function homeFor(source: string) {
   return home
 }
 describe('usage readers', () => {
-  it('keeps the winning Claude snapshot parts and infers no provider for other models', async () => {
+  it('keeps the winning Claude snapshot parts and infers a non-Claude provider', async () => {
     // Given
     const home = await homeFor('claude')
     await writeFile(
@@ -47,7 +47,7 @@ describe('usage readers', () => {
             type: 'assistant',
             timestamp: '2026-11-15T15:30:00Z',
             requestId: 'snapshot',
-            message: { id: 'snapshot', model: 'other', usage },
+            message: { id: 'snapshot', model: 'glm-5', usage },
           }),
         )
         .join('\n'),
@@ -55,11 +55,11 @@ describe('usage readers', () => {
     // When
     const result = await readClaude({ home, sinceMs: 0, env: {} })
     // Then
-    expect(result.rows.find((row) => row.model === 'other')).toEqual({
+    expect(result.rows.find((row) => row.model === 'glm-5')).toEqual({
       date: '2026-11-16',
       tool: 'claude-code',
-      model: 'other',
-      provider: 'unknown',
+      model: 'glm-5',
+      provider: 'zai',
       tokens: 11,
       input: 3,
       output: 8,

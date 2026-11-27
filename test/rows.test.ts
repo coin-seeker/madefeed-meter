@@ -1,12 +1,71 @@
 import { expect, it } from 'vitest'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { Transform } from 'node:stream'
+import { createZstdDecompress, zstdCompressSync } from 'node:zlib'
 import {
   aggregate,
   MAX_ROW_TOKENS,
   MeterError,
   providerName,
+  textLines,
 } from '../src/aggregate'
 import type { UsageRow } from '../src/aggregate'
 import { uploadChunks } from '../src/chunks'
+
+it.each([1, 2])(
+  'reads %s concatenated zstd frames from a .zstd path',
+  async (frames) => {
+    // Given
+    const home = await mkdtemp(join(tmpdir(), 'madefeed-zstd-'))
+    const path = join(home, 'events.jsonl.zstd')
+    try {
+      await writeFile(
+        path,
+        Buffer.concat(
+          Array.from({ length: frames }, (_, i) =>
+            zstdCompressSync(Buffer.from(`모델-${i}\r\n`)),
+          ),
+        ),
+      )
+      // When
+      const lines = await Array.fromAsync(textLines(path, createZstdDecompress))
+      // Then
+      expect(lines).toEqual(
+        Array.from({ length: frames }, (_, i) => `모델-${i}`),
+      )
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
+  },
+)
+it('preserves yielded lines and propagates a subsequent decompression error', async () => {
+  // Given
+  const home = await mkdtemp(join(tmpdir(), 'madefeed-zstd-'))
+  const path = join(home, 'events.zstd')
+  const failure = new Error('broken stream')
+  const lines: string[] = []
+  try {
+    await writeFile(path, '')
+    const decompressor = () =>
+      new Transform({
+        flush(callback) {
+          this.push(Buffer.from('complete\n'))
+          setImmediate(() => callback(failure))
+        },
+      })
+    // When
+    const read = async () => {
+      for await (const line of textLines(path, decompressor)) lines.push(line)
+    }
+    // Then
+    await expect(read()).rejects.toThrow(failure)
+    expect(lines).toEqual(['complete'])
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
 
 const row: UsageRow = {
   date: '2026-11-16',

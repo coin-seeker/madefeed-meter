@@ -204,7 +204,7 @@ it.each([false, true])(
     )
   },
 )
-it('C8 maps model id 1402 without inferring an anthropic provider', async () => {
+it('C8 maps model id 1402 and infers its anthropic provider', async () => {
   // Given
   const options = await setup()
   database(options.root, 'a.db', {
@@ -215,7 +215,7 @@ it('C8 maps model id 1402 without inferring an anthropic provider', async () => 
   // Then
   expect(result.rows[0]).toMatchObject({
     model: 'claude-opus-5-5',
-    provider: 'unknown',
+    provider: 'anthropic',
   })
 })
 it('C9 normalizes a display model and strips effort', async () => {
