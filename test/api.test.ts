@@ -63,7 +63,7 @@ it('sends exactly one heartbeat request when rows are empty', async () => {
   })
   // Then
   expect(bodies).toEqual([
-    { deviceName: 'test-device', cliVersion: VERSION, rows: [] },
+    { deviceName: 'test-device', cliVersion: '0.10.0', rows: [] },
   ])
   expect(result).toEqual({
     accepted: 0,

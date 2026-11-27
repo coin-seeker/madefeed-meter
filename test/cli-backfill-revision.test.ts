@@ -138,8 +138,8 @@ it('keeps the one-time re-sum when the Codex history cannot be read during it', 
   })
 })
 
-it.each([2, 3])(
-  're-sums revision %i once as revision 4 then sends plain uploads',
+it.each([2, 3, 4])(
+  're-sums revision %i once as revision 5 then sends plain uploads',
   async (revision) => {
     // Given
     const { runtime, home, bodies } = await cliFixture()
@@ -150,32 +150,52 @@ it.each([2, 3])(
       backfill: 'done',
       backfillRevision: revision,
     })
+    await writeFile(
+      join(home, '.gemini/tmp/history.json'),
+      JSON.stringify({
+        type: 'gemini',
+        model: 'history',
+        timestamp: '2026-10-18T09:00:00Z',
+        tokens: { total: 7 },
+      }),
+    )
     // When
     await runCli(['upload', '--no-auto'], { ...runtime, zstd })
     await runCli(['upload', '--no-auto'], { ...runtime, zstd })
     // Then
     expect(bodies).toEqual([
-      expect.objectContaining({ backfill: true, backfillRevision: 4 }),
+      expect.objectContaining({ backfill: true, backfillRevision: 5 }),
       expect.not.objectContaining({ backfill: true }),
     ])
-    expect(await readConfig(home)).toMatchObject({ backfillRevision: 4 })
+    expect(JSON.stringify(bodies[0])).toContain('history')
+    expect(await readConfig(home)).toMatchObject({ backfillRevision: 5 })
   },
 )
 
 it.each([
   {
-    title: 'claims revision 3 while Hermes cannot be read, then 4 once it can',
+    title: 'claims revision 3 while Hermes cannot be read, then 5 once it can',
     directory: '.hermes',
     file: 'state.db',
     reason: 'Hermes 기록을 읽지 못해 이번에는 빼고 올려요.',
+    revision: 3,
   },
   {
     title: 'claims revision 3 while Antigravity cannot be read',
     directory: '.gemini/antigravity/conversations',
     file: 'x.db',
     reason: 'Antigravity 기록을 읽지 못해 이번에는 빼고 올려요.',
+    revision: 3,
   },
-])('$title', async ({ directory, file, reason }) => {
+  {
+    title:
+      'claims revision 4 while a new reader fails, then 5 once it recovers',
+    directory: '.local/share/goose/sessions',
+    file: 'sessions.db',
+    reason: 'Goose 기록을 읽지 못해 이번에는 빼고 올려요.',
+    revision: 4,
+  },
+])('$title', async ({ directory, file, reason, revision }) => {
   // Given: a first sum with an unreadable source in an isolated home.
   const { runtime, home, bodies, diagnostic } = await cliFixture()
   const zstd = zstdDecompressor()
@@ -189,14 +209,14 @@ it.each([
   await rm(root, { recursive: true })
   await runCli(['upload', '--no-auto'], { ...runtime, zstd })
   await runCli(['upload', '--no-auto'], { ...runtime, zstd })
-  // Then: the failed read preserves a revision-4 re-sum for the recovery.
+  // Then: the failed read preserves a revision-5 re-sum for the recovery.
   expect(bodies).toEqual([
-    expect.objectContaining({ backfill: true, backfillRevision: 3 }),
-    expect.objectContaining({ backfill: true, backfillRevision: 4 }),
+    expect.objectContaining({ backfill: true, backfillRevision: revision }),
+    expect.objectContaining({ backfill: true, backfillRevision: 5 }),
     expect.not.objectContaining({ backfill: true }),
   ])
   expect(diagnostic).toContain(reason)
-  expect(await readConfig(home)).toMatchObject({ backfillRevision: 4 })
+  expect(await readConfig(home)).toMatchObject({ backfillRevision: 5 })
 })
 
 it('keeps a revision-3 device without a backfill while Hermes cannot be read', async () => {

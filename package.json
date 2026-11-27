@@ -1,6 +1,6 @@
 {
   "name": "@the-seeker/madefeed",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "MadeFeed 토큰 미터: AI 코딩 도구의 토큰 사용량 합계를 madefeed.dev 에 올려요.",
   "homepage": "https://madefeed.dev/meter",
   "repository": {

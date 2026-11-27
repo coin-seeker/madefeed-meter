@@ -7,6 +7,7 @@ import { readCodex } from '../src/sources/codex'
 import { readOpenCode } from '../src/sources/opencode'
 import { aggregate, payload, MAX_ROW_TOKENS } from '../src/aggregate'
 import { kstDateOf } from '../src/kst'
+import { sourceReaders } from '../src/sources'
 
 const homes: string[] = []
 // SIZE_OK: shared temporary-home fixtures keep cross-source dedupe and full wire-field assertions together.
@@ -32,6 +33,9 @@ async function homeFor(source: string) {
   return home
 }
 describe('usage readers', () => {
+  it('registers all 22 local usage readers', () => {
+    expect(sourceReaders).toHaveLength(22)
+  })
   it('keeps the winning Claude snapshot parts and infers a non-Claude provider', async () => {
     // Given
     const home = await homeFor('claude')

@@ -9,6 +9,33 @@ import { readOmo } from './omo'
 import { readAgy } from './agy'
 import { readHermes } from './hermes'
 import { readGrok } from './grok'
+import { readAmp } from './amp'
+import { readDroid } from './droid'
+import { readCodebuff } from './codebuff'
+import { readCline } from './cline'
+import { readKimi } from './kimi'
+import { readQwen } from './qwen'
+import { readGoose } from './goose'
+import { readKilo } from './kilo'
+import { readZcode } from './zcode'
+import { readOpenClaw } from './openclaw'
+import { readCopilot } from './copilot'
+import { readDsh } from './dsh'
+
+const newSourceReaders = [
+  readAmp,
+  readDroid,
+  readCodebuff,
+  readCline,
+  readKimi,
+  readQwen,
+  readGoose,
+  readKilo,
+  readZcode,
+  readOpenClaw,
+  readCopilot,
+  readDsh,
+] as const
 
 export const sourceReaders = [
   readClaude,
@@ -21,6 +48,7 @@ export const sourceReaders = [
   readAgy,
   readHermes,
   readGrok,
+  ...newSourceReaders,
 ] as const
 
 export async function readSources(options: SourceOptions) {
@@ -28,5 +56,8 @@ export async function readSources(options: SourceOptions) {
   const codex = results[sourceReaders.indexOf(readCodex)]?.supported === true
   const agy = results[sourceReaders.indexOf(readAgy)]?.supported === true
   const hermes = results[sourceReaders.indexOf(readHermes)]?.supported === true
-  return { results, codex, agy, hermes }
+  const newSourcesOk = newSourceReaders.every(
+    (read) => results[sourceReaders.indexOf(read)]?.supported === true,
+  )
+  return { results, codex, agy, hermes, newSourcesOk }
 }

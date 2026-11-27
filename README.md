@@ -40,6 +40,8 @@ npx @the-seeker/madefeed@latest
 | `--url URL` | 서버 주소예요. 기본은 `https://madefeed.dev`예요. |
 | `--no-auto` | 이번 실행에서만 자동 전송 등록·갱신을 건너뛰어요. |
 
+0.10.0은 Amp, Droid, Codebuff, Cline, Kimi CLI, Qwen Code, Goose, Kilo Code, ZCode, OpenClaw, Copilot CLI, DeepSeek Harness를 추가해요. 기록된 제공사가 없으면 모델 이름으로 GLM·DeepSeek·Qwen·Kimi·Muse 등의 제공사를 추정해요. 기존 기기도 지난 30일을 한 번 다시 합산해요(revision 5). 새 도구 중 하나라도 읽지 못하면 revision 4까지만 완료해 나중에 다시 시도할 수 있어요. `npx @the-seeker/madefeed@latest`를 한 번 실행해 재합산하고 자동 전송 복사본도 갱신해 주세요.
+
 ## 자동 전송
 
 기기를 연결하면 한 시간마다 최근 3일의 사용량을 자동으로 올려요. 이전 버전에서 연결했다면 다음 `npx @the-seeker/madefeed@latest upload` 실행 때 등록해요. 터미널을 계속 열어 둘 필요가 없어요.
@@ -52,7 +54,7 @@ npx @the-seeker/madefeed@latest
 
 `npx @the-seeker/madefeed@latest auto off`로 끄고, `npx @the-seeker/madefeed@latest auto on`으로 다시 켤 수 있어요. `--no-auto` 또는 `MADEFEED_NO_AUTO=1`은 이번 실행의 등록·갱신만 건너뛰며, 이미 등록한 작업을 끄지는 않아요. `--dry-run`도 등록하지 않아요. 예약 실행에는 `--scheduled`가 붙고, 연결 정보가 없으면 로그인 없이 건너뛰어요. 등록에 실패해도 `npx @the-seeker/madefeed@latest upload`로 직접 올릴 수 있어요.
 
-설치할 때 설정한 `OPENCODE_DATA_DIR`, `XDG_DATA_HOME`, `GEMINI_DATA_DIR`, `MADEFEED_URL`, `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `PI_CODING_AGENT_DIR`, `PI_CODING_AGENT_SESSION_DIR`, `OMO_CODING_AGENT_DIR`, `OMO_CODING_AGENT_SESSION_DIR`, `ANTIGRAVITY_DATA_DIR`, `HERMES_HOME`, `GROK_HOME`은 예약 작업에도 전달해요.
+설치할 때 설정한 `OPENCODE_DATA_DIR`, `XDG_DATA_HOME`, `GEMINI_DATA_DIR`, `MADEFEED_URL`, `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `PI_CODING_AGENT_DIR`, `PI_CODING_AGENT_SESSION_DIR`, `OMO_CODING_AGENT_DIR`, `OMO_CODING_AGENT_SESSION_DIR`, `ANTIGRAVITY_DATA_DIR`, `HERMES_HOME`, `GROK_HOME`, `AMP_DATA_DIR`, `DROID_SESSIONS_DIR`, `CODEBUFF_DATA_DIR`, `CLINE_DATA_DIR`, `XDG_CONFIG_HOME`, `GOOSE_PATH_ROOT`, `OPENCLAW_DIR`, `KILO_DATA_DIR`, `KIMI_DATA_DIR`, `QWEN_DATA_DIR`, `COPILOT_HOME`, `ZCODE_HOME`, `DSH_HOME`은 예약 작업에도 전달해요.
 
 ## 연결 끊기와 정리
 
@@ -71,7 +73,9 @@ npx @the-seeker/madefeed@latest
 
 ## 읽는 곳
 
-Claude Code, Codex, OpenCode, Gemini CLI, Pi, oh-my-pi, OmO, Antigravity, Hermes, Grok Build의 로컬 사용 기록을 읽기 전용으로 읽어요. Antigravity는 CLI와 IDE의 대화 기록 데이터베이스(`.db`)를 읽고, 암호화된 `.pb` 파일은 읽지 않아요. Antigravity 안에서 쓴 Gemini 모델 사용량은 Antigravity로 세요. CLI 형식은 공개되지 않아 바뀌면 읽을 수 없는 값을 추측해 세지 않아요. Hermes는 `~/.hermes/state.db`와 프로필의 `state.db`에서 모델별 토큰 기록을 읽어요. 여러 날에 걸친 세션은 같은 폴더의 `logs/agent.log` 호출 기록으로 날짜를 나눠요. 호출 기록이 없으면 처음 쓴 날짜로 세고, 기록이 일부만 남아 날짜를 알 수 없는 사용량은 세지 않아요. Grok Build는 `~/.grok/sessions` 아래 `updates.jsonl`을 읽으며, `GROK_HOME`으로 루트를 바꿀 수 있어요. Cursor는 아직 지원하지 않아요.
+Claude Code, Codex, OpenCode, Gemini CLI, Pi, oh-my-pi, OmO, Antigravity, Hermes, Grok Build, Amp, Droid, Codebuff, Cline, Kimi CLI, Qwen Code, Goose, Kilo Code, ZCode, OpenClaw, Copilot CLI, DeepSeek Harness의 로컬 사용 기록을 읽기 전용으로 읽어요. Antigravity는 CLI와 IDE의 대화 기록 데이터베이스(`.db`)를 읽고, 암호화된 `.pb` 파일은 읽지 않아요. Antigravity 안에서 쓴 Gemini 모델 사용량은 Antigravity로 세요. CLI 형식은 공개되지 않아 바뀌면 읽을 수 없는 값을 추측해 세지 않아요. Hermes는 `~/.hermes/state.db`와 프로필의 `state.db`에서 모델별 토큰 기록을 읽어요. 여러 날에 걸친 세션은 같은 폴더의 `logs/agent.log` 호출 기록으로 날짜를 나눠요. 호출 기록이 없으면 처음 쓴 날짜로 세고, 기록이 일부만 남아 날짜를 알 수 없는 사용량은 세지 않아요. Grok Build는 `~/.grok/sessions` 아래 `updates.jsonl`을 읽으며, `GROK_HOME`으로 루트를 바꿀 수 있어요. Cursor는 아직 지원하지 않아요.
+
+Droid와 Goose는 세션 전체를 한 날짜로 세요. Goose는 캐시 구분을 알 수 없어 입력·출력만 보내요. Copilot CLI는 `session-state`의 사용량과 종료 기록만 읽고 OTel은 중복 집계 방지를 위해 읽지 않아요. 따라서 일부 사용량은 빠질 수 있어요.
 
 CLI는 실행 중인 운영체제의 홈을 읽어요. 도구를 WSL에서 실행한다면 CLI도 WSL에서 실행해요. Windows에서 `CODEX_HOME`이나 `CLAUDE_CONFIG_DIR`에 `\\wsl.localhost\Ubuntu\home\me\.codex` 같은 UNC 경로를 쉼표로 구분해 추가할 수 있지만 WSL을 자동으로 찾지는 않아요.
 

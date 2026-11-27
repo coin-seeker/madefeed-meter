@@ -19,7 +19,7 @@ it('lists all supported tools and explains versioned history in help', async () 
   await runCli(['--help'], { output: (text) => output.push(text) })
   // Then
   expect(output.join('')).toContain(
-    'Pi, oh-my-pi, OmO, Antigravity, Hermes, Grok Build',
+    'Amp, Droid, Codebuff, Cline, Kimi CLI, Qwen Code, Goose, Kilo Code, ZCode, OpenClaw, Copilot CLI, DeepSeek Harness',
   )
   expect(output.join('')).toContain(
     '더 많은 기록을 읽는 버전에서는 지난 30일을 한 번 다시 합산해요.',
@@ -71,7 +71,7 @@ it('dry-run never calls injected fetch and prints the exact upload body without 
   expect(calls).toBe(0)
   expect(JSON.parse(output.join(''))).toEqual({
     deviceName: expect.any(String),
-    cliVersion: VERSION,
+    cliVersion: '0.10.0',
     rows: [],
   })
 })
